@@ -1,0 +1,10 @@
+{
+  "name": "mmmelhormarmita",
+  "version": "1.0.0",
+  "description": "Teste do Melhor Marmita",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {}
+}
