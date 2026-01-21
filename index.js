@@ -1,16 +1,12 @@
-// index.js
-const XLSX = require('xlsx');
+const express = require('express');
 
-// Lê o arquivo menu.xlsx que você subiu no repositório
-const workbook = XLSX.readFile('menu.xlsx');
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-// Pega a primeira planilha
-const sheetName = workbook.SheetNames[0];
-const sheet = workbook.Sheets[sheetName];
+app.get('/', (req, res) => {
+  res.send('Servidor rodando');
+});
 
-// Converte a planilha para um array de objetos
-const data = XLSX.utils.sheet_to_json(sheet);
-
-// Mostra no console
-console.log("Conteúdo do menu:");
-console.log(data);
+app.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
+});
