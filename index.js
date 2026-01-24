@@ -62,9 +62,9 @@ app.post('/mensagem', (req, res) => {
   let resposta = '';
 
   // Verifica se o cliente é novo ou precisa de saudação
-if (!cliente.recebeuSaudacao || cliente.estado === 'FINALIZADO' || cliente.inativoMaisDe30Segundos) {
+if (!cliente.recebeuSaudacao || cliente.estado === 'FINALIZADO' || cliente.inativoMaisDe10Min) {
   cliente.recebeuSaudacao = true; // marca que ele recebeu
-  cliente.inativoMaisDe30Segundos = false; // reseta a flag de inatividade
+  cliente.inativoMaisDe10Min = false; // reseta a flag de inatividade
   cliente.estado = 'MENU'; // garante que o estado volta para o menu inicial
 
   const saudacao = enviarSaudacao(cliente);
