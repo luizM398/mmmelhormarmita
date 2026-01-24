@@ -115,8 +115,84 @@ app.post('/mensagem', (req, res) => {
 
   // ESTADO: PEDIDO
   else if (cliente.estado === 'PEDIDO') {
-    resposta = 'Fluxo de pedido em construção.';
+  try {
+    const arquivo = path.join(__dirname, 'menu.xlsx');
+    const workbook = xlsx.readFile(arquivo);
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const dados = xlsx.utils.sheet_to_json(sheet);
+
+    const pratoEscolhido = dados.find(
+      item => String(item['CÓDIGO']) === texto
+    );
+
+    if (!pratoEscolhido) {
+      resposta = 'Código inválido. Digite um código válido do cardápio.';
+    } else {
+      cliente.pedido.push({
+        codigo: pratoEscolhido['CÓDIGO'],
+        prato: pratoEscolhido['PRATO'],
+        valor: pratoEscolhido['VALOR']
+      });
+
+      const nomePrato = pratoEscolhido['PRATO'].toLowerCase();
+
+      if (nomePrato.includes('arroz')) {
+        cliente.estado = 'VARIACAO_ARROZ';
+        resposta =
+          `🍚 Você escolheu: ${pratoEscolhido['PRATO']}\n\n` +
+          `Escolha o tipo de arroz:\n` +
+          `1️⃣ Branco\n` +
+          `2️⃣ Integral`;
+      }
+      else if (nomePrato.includes('estrogonofe')) {
+        cliente.estado = 'VARIACAO_ESTROGONOFE';
+        resposta =
+          `🍛 Você escolheu: ${pratoEscolhido['PRATO']}\n\n` +
+          `Escolha a variação:\n` +
+          `1️⃣ Tradicional\n` +
+          `2️⃣ Light`;
+      }
+      else {
+        cliente.estado = 'QUANTIDADE';
+        resposta =
+          `Você escolheu: ${pratoEscolhido['PRATO']}\n\n` +
+          `Digite a quantidade desejada.`;
+      }
+    }
+
+  } catch (erro) {
+    resposta = 'Erro ao processar o pedido.';
   }
+}
+
+    else if (cliente.estado === 'VARIACAO_ARROZ') {
+  if (texto === '1') {
+    cliente.pedido[cliente.pedido.length - 1].variacao = 'Arroz branco';
+  } else if (texto === '2') {
+    cliente.pedido[cliente.pedido.length - 1].variacao = 'Arroz integral';
+  } else {
+    resposta = 'Opção inválida. Escolha 1 ou 2.';
+    return res.json({ resposta });
+  }
+
+  cliente.estado = 'QUANTIDADE';
+  resposta = 'Digite a quantidade desejada.';
+}
+
+else if (cliente.estado === 'VARIACAO_ESTROGONOFE') {
+  if (texto === '1') {
+    cliente.pedido[cliente.pedido.length - 1].variacao = 'Tradicional';
+  } else if (texto === '2') {
+    cliente.pedido[cliente.pedido.length - 1].variacao = 'Light';
+  } else {
+    resposta = 'Opção inválida. Escolha 1 ou 2.';
+    return res.json({ resposta });
+  }
+
+  cliente.estado = 'QUANTIDADE';
+  resposta = 'Digite a quantidade desejada.';
+}
 
 // ESTADO: ESCOLHENDO_PRATO
 else if (cliente.estado === 'ESCOLHENDO_PRATO') {
