@@ -228,28 +228,27 @@ cliente.pedido.push({
 cliente.precisaArroz = nomePrato.includes('arroz');
       cliente.precisaEstrogonofe = nomePrato.includes('estrogonofe');
 
-      if (cliente.precisaArroz) {
-        cliente.estado = 'VARIACAO_ARROZ';
-        resposta =
-          `🍚 Você escolheu: ${pratoEscolhido['PRATO']}\n\n` +
-          `Escolha o tipo de arroz:\n` +
-          `1️⃣ Branco\n` +
-          `2️⃣ Integral`;
-      }
-      else if (cliente.precisaEstrogonofe) {
-        cliente.estado = 'VARIACAO_ESTROGONOFE';
-        resposta =
-          `🍛 Você escolheu: ${pratoEscolhido['PRATO']}\n\n` +
-          `Escolha a variação:\n` +
-          `1️⃣ Tradicional\n` +
-          `2️⃣ Light`;
-      }
-      else {
-        cliente.estado = 'QUANTIDADE';
-        resposta =
-          `Você escolheu: ${pratoEscolhido['PRATO']}\n\n` +
-          `Digite a quantidade desejada.`;
-      }
+     if (cliente.precisaArroz) {
+  cliente.estado = 'VARIACAO_ARROZ';
+  resposta =
+    `🍚 Você escolheu: ${pratoEscolhido['PRATO']}\n\n` +
+    `Escolha o tipo de arroz:\n` +
+    `1️⃣ Branco\n` +
+    `2️⃣ Integral`;
+
+} else if (cliente.precisaEstrogonofe) {
+  cliente.estado = 'VARIACAO_ESTROGONOFE';
+  resposta =
+    `🍛 Você escolheu: ${pratoEscolhido['PRATO']}\n\n` +
+    `Escolha a variação do estrogonofe:\n` +
+    `1️⃣ Tradicional\n` +
+    `2️⃣ Light`;
+
+} else {
+  cliente.estado = 'QUANTIDADE';
+  resposta = 'Digite a quantidade desejada.';
+}
+    
   }
 }
   
