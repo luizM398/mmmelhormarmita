@@ -15,7 +15,7 @@ app.get('/', (req, res) => {
   res.send('Servidor rodando');
 });
 
-// rota do menu
+// rota do menu (teste direto)
 app.get('/menu', (req, res) => {
   try {
     const arquivo = path.join(__dirname, 'menu.xlsx');
@@ -25,7 +25,6 @@ app.get('/menu', (req, res) => {
     const sheet = workbook.Sheets[sheetName];
 
     const dados = xlsx.utils.sheet_to_json(sheet);
-
     res.json(dados);
   } catch (erro) {
     console.log(erro);
@@ -39,6 +38,7 @@ app.post('/webhook', (req, res) => {
   res.status(200).send('ok');
 });
 
+// rota principal de mensagens
 app.post('/mensagem', (req, res) => {
   const { numero, texto } = req.body;
 
@@ -51,50 +51,55 @@ app.post('/mensagem', (req, res) => {
   const cliente = estadoClientes.getEstado(numero);
   let resposta = '';
 
- if (texto === '1') {
-  try {
-    const arquivo = path.join(__dirname, 'menu.xlsx');
-    const workbook = xlsx.readFile(arquivo);
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    const dados = xlsx.utils.sheet_to_json(sheet);
+  // ESTADO: MENU
+  if (cliente.estado === 'MENU') {
 
-    let lista = '🍱 Cardápio:\n\n';
+    if (texto === '1') {
+      try {
+        const arquivo = path.join(__dirname, 'menu.xlsx');
+        const workbook = xlsx.readFile(arquivo);
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const dados = xlsx.utils.sheet_to_json(sheet);
 
-    dados.forEach(item => {
-      lista += `${item.codigo}️⃣ ${item.nome}\n`;
-    });
+        let lista = '🍱 Cardápio:\n\n';
 
-    lista += '\n🔥 A partir de 5 marmitas: R$ 17,49/unidade';
+        dados.forEach(item => {
+          lista += `${item.codigo}️⃣ ${item.nome}\n`;
+        });
 
-    resposta = lista;
-  } catch (erro) {
-    resposta = 'Erro ao carregar o cardápio.';
-  }
-}
+        lista += '\n🔥 A partir de 5 marmitas: R$ 17,49/unidade';
+        resposta = lista;
+
+      } catch (erro) {
+        resposta = 'Erro ao carregar o cardápio.';
+      }
+
     } else if (texto === '2') {
       cliente.estado = 'PEDIDO';
       resposta = 'Pedido iniciado. Em breve vamos listar os pratos.';
+
     } else if (texto === '3') {
       cliente.estado = 'ELOGIO';
       resposta = mensagens.elogios;
+
     } else {
       resposta = mensagens.menuPrincipal;
     }
   }
 
+  // ESTADO: ELOGIO
   else if (cliente.estado === 'ELOGIO') {
     cliente.estado = 'MENU';
     resposta = mensagens.agradecimento + '\n\n' + mensagens.menuPrincipal;
   }
 
+  // ESTADO: PEDIDO
   else if (cliente.estado === 'PEDIDO') {
     resposta = 'Fluxo de pedido em construção.';
   }
 
-  res.json({
-    resposta
-  });
+  res.json({ resposta });
 });
 
 // inicia o servidor
