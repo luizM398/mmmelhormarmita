@@ -216,12 +216,6 @@ else if (cliente.estado === 'ESCOLHENDO_PRATO') {
   } else {
     const pratoEscolhido = cliente.opcoesPrato[escolha - 1];
 
-    cliente.pedido.push({
-      prato: pratoEscolhido,
-      variacao: null,
-      quantidade: 0
-    });
-
     const nomePrato = pratoEscolhido['PRATO'].toLowerCase();
 
 cliente.pedido.push({
