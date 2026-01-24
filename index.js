@@ -1,6 +1,8 @@
 const express = require('express');
 const xlsx = require('xlsx');
 const path = require('path');
+const estadoClientes = require('./estadoClientes');
+const mensagens = require('./mensagens');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
