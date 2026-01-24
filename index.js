@@ -65,7 +65,7 @@ app.post('/mensagem', (req, res) => {
         let lista = '🍱 Cardápio:\n\n';
 
         dados.forEach(item => {
-          lista += `${item.codigo}️⃣ ${item.nome}\n`;
+          lista += `${item['CÓDIGO']}️⃣ ${item['PRATO']} - R$ ${item['VALOR']}\n`;
         });
 
         lista += '\n🔥 A partir de 5 marmitas: R$ 17,49/unidade';
