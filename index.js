@@ -118,6 +118,35 @@ app.post('/mensagem', (req, res) => {
     resposta = 'Fluxo de pedido em construção.';
   }
 
+// ESTADO: ESCOLHENDO_PRATO
+else if (cliente.estado === 'ESCOLHENDO_PRATO') {
+  const escolha = parseInt(texto);
+
+  if (
+    isNaN(escolha) ||
+    escolha < 1 ||
+    escolha > cliente.opcoesPrato.length
+  ) {
+    resposta = 'Por favor, escolha um número válido do cardápio.';
+  } else {
+    const pratoEscolhido = cliente.opcoesPrato[escolha - 1];
+
+    cliente.pedido.push({
+      prato: pratoEscolhido,
+      variacao: null,
+      quantidade: 0
+    });
+
+    cliente.estado = 'MENU';
+
+    resposta =
+      `✅ Prato escolhido:\n` +
+      `${pratoEscolhido['PRATO']}\n\n` +
+      `Em breve vamos continuar o pedido.\n\n` +
+      mensagens.menuPrincipal;
+  }
+}
+  
   res.json({ resposta });
 });
 
