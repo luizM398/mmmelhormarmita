@@ -176,8 +176,7 @@ app.post('/mensagem', (req, res) => {
     return res.json({ resposta });
   }
 
-  cliente.estado = 'QUANTIDADE';
-  resposta = 'Digite a quantidade desejada.';
+ 
 }
 
 else if (cliente.estado === 'VARIACAO_ESTROGONOFE') {
