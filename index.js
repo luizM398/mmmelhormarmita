@@ -114,14 +114,12 @@ app.post('/mensagem', (req, res) => {
       if (cliente.precisaArroz) {
         cliente.estado = 'VARIACAO_ARROZ';
         resposta =
-          `🍚 ${prato['PRATO']}\n\nEscolha o tipo de arroz:\n` +
-          `1️⃣ Branco\n2️⃣ Integral`;
+          `🍚 ${prato['PRATO']}\n\nEscolha o tipo de arroz:\n1️⃣ Branco\n2️⃣ Integral`;
       } 
       else if (cliente.precisaStrogonoff) {
         cliente.estado = 'VARIACAO_STROGONOFF';
         resposta =
-          `🍛 ${prato['PRATO']}\n\nEscolha a variação do strogonoff:\n` +
-          `1️⃣ Tradicional\n2️⃣ Light`;
+          `🍛 ${prato['PRATO']}\n\nEscolha a variação do strogonoff:\n1️⃣ Tradicional\n2️⃣ Light`;
       } 
       else {
         cliente.estado = 'QUANTIDADE';
@@ -140,8 +138,7 @@ app.post('/mensagem', (req, res) => {
     if (cliente.precisaStrogonoff) {
       cliente.estado = 'VARIACAO_STROGONOFF';
       resposta =
-        `🍛 Escolha a variação do strogonoff:\n` +
-        `1️⃣ Tradicional\n2️⃣ Light`;
+        `🍛 Escolha a variação do strogonoff:\n1️⃣ Tradicional\n2️⃣ Light`;
     } else {
       cliente.estado = 'QUANTIDADE';
       resposta = 'Digite a quantidade desejada.';
@@ -161,50 +158,56 @@ app.post('/mensagem', (req, res) => {
 
 // ================== QUANTIDADE ==================
 
-else if (cliente.estado === 'QUANTIDADE') {
-  const qtd = parseInt(texto);
+  else if (cliente.estado === 'QUANTIDADE') {
+    const qtd = parseInt(texto);
 
-  if (isNaN(qtd) || qtd < 1) {
-    resposta = 'Digite uma quantidade válida.';
-  } else {
-    cliente.pedido[0].quantidade = qtd;
+    if (isNaN(qtd) || qtd < 1) {
+      resposta = 'Digite uma quantidade válida.';
+    } else {
+      cliente.pedido[0].quantidade = qtd;
 
-    // Agora perguntamos se quer adicionar mais pratos
-    cliente.estado = 'ADICIONAR_OUTRO';
-    resposta = `✅ Pedido anotado!\n\nDeseja adicionar mais pratos?\n1️⃣ Sim\n2️⃣ Não`;
+      // Agora perguntamos se quer adicionar mais pratos
+      cliente.estado = 'ADICIONAR_OUTRO';
+      resposta = `✅ Pedido anotado!\n\nDeseja adicionar mais pratos?\n1️⃣ Sim\n2️⃣ Não`;
+    }
   }
-}
 
 // ================== ADICIONAR OUTRO PRATO ==================
 
-else if (cliente.estado === 'ADICIONAR_OUTRO') {
-  if (texto === '1') {
-    // Cliente quer adicionar mais pratos
-    cliente.estado = 'ESCOLHENDO_PRATO';
-    const arquivo = path.join(__dirname, 'menu.xlsx');
-    const workbook = xlsx.readFile(arquivo);
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const dados = xlsx.utils.sheet_to_json(sheet);
+  else if (cliente.estado === 'ADICIONAR_OUTRO') {
+    if (texto === '1') {
+      // Cliente quer adicionar mais pratos
+      cliente.estado = 'ESCOLHENDO_PRATO';
+      const arquivo = path.join(__dirname, 'menu.xlsx');
+      const workbook = xlsx.readFile(arquivo);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const dados = xlsx.utils.sheet_to_json(sheet);
 
-    cliente.opcoesPrato = dados;
+      cliente.opcoesPrato = dados;
 
-    let lista = '🍽️ Escolha um prato:\n\n';
-    dados.forEach((item, index) => {
-      lista += `${index + 1}️⃣ ${item['PRATO']}\n`;
-    });
+      let lista = '🍽️ Escolha um prato:\n\n';
+      dados.forEach((item, index) => {
+        lista += `${index + 1}️⃣ ${item['PRATO']}\n`;
+      });
 
-    resposta = lista;
+      resposta = lista;
 
-  } else if (texto === '2') {
-    // Cliente finalizou o pedido
-    cliente.estado = 'MENU';
-    resposta = '✅ Pedido finalizado! Volte ao menu para novas opções.';
-  } else {
-    resposta = 'Escolha uma opção válida: 1️⃣ Sim ou 2️⃣ Não';
+    } else if (texto === '2') {
+      // Cliente finalizou o pedido
+      cliente.estado = 'MENU';
+      resposta = '✅ Pedido finalizado! Volte ao menu para novas opções.';
+    } else {
+      resposta = 'Escolha uma opção válida: 1️⃣ Sim ou 2️⃣ Não';
+    }
   }
-}
+
+// ================== RESPONDER ==================
+
+  res.json({ resposta });
+}); // <-- FECHA CORRETAMENTE O APP.POST
+
 // ================== SERVER ==================
 
-}app.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
