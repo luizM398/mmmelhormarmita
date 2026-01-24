@@ -1,36 +1,11 @@
 const express = require('express');
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// middleware para JSON (IMPORTANTE)
-app.use(express.json());
-
-// rota de teste
-app.get('/', (req, res) => {
-  res.send('Servidor rodando');
-});
-
-// webhook do Mercado Pago
-app.post('/webhook', (req, res) => {
-  console.log('Webhook recebido');
-  console.log(req.body);
-
-  res.status(200).send('ok');
-});
-
-// manter servidor vivo
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-});
-
-const express = require('express');
 const xlsx = require('xlsx');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// permite receber dados em JSON
 app.use(express.json());
 
 // rota teste
@@ -38,7 +13,7 @@ app.get('/', (req, res) => {
   res.send('Servidor rodando');
 });
 
-// rota para ler o menu
+// rota do menu
 app.get('/menu', (req, res) => {
   try {
     const arquivo = path.join(__dirname, 'menu.xlsx');
@@ -51,16 +26,18 @@ app.get('/menu', (req, res) => {
 
     res.json(dados);
   } catch (erro) {
+    console.log(erro);
     res.status(500).send('Erro ao ler o menu');
   }
 });
 
-// webhook Mercado Pago (deixa quieto)
+// webhook Mercado Pago (não mexe)
 app.post('/webhook', (req, res) => {
   console.log('Webhook recebido');
   res.status(200).send('ok');
 });
 
+// inicia o servidor
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
