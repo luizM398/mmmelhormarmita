@@ -213,13 +213,37 @@ else if (cliente.estado === 'ESCOLHENDO_PRATO') {
       quantidade: 0
     });
 
-    cliente.estado = 'MENU';
+    const nomePrato = pratoEscolhido['PRATO'].toLowerCase();
 
-    resposta =
-      `✅ Prato escolhido:\n` +
-      `${pratoEscolhido['PRATO']}\n\n` +
-      `Em breve vamos continuar o pedido.\n\n` +
-      mensagens.menuPrincipal;
+cliente.pedido.push({
+  prato: pratoEscolhido['PRATO'],
+  valor: pratoEscolhido['VALOR'],
+  variacao: null,
+  quantidade: 0
+});
+
+if (nomePrato.includes('arroz')) {
+  cliente.estado = 'VARIACAO_ARROZ';
+  resposta =
+    `🍚 Você escolheu: ${pratoEscolhido['PRATO']}\n\n` +
+    `Escolha o tipo de arroz:\n` +
+    `1️⃣ Branco\n` +
+    `2️⃣ Integral`;
+}
+else if (nomePrato.includes('estrogonofe')) {
+  cliente.estado = 'VARIACAO_ESTROGONOFE';
+  resposta =
+    `🍛 Você escolheu: ${pratoEscolhido['PRATO']}\n\n` +
+    `Escolha a variação:\n` +
+    `1️⃣ Tradicional\n` +
+    `2️⃣ Light`;
+}
+else {
+  cliente.estado = 'QUANTIDADE';
+  resposta =
+    `Você escolheu: ${pratoEscolhido['PRATO']}\n\n` +
+    `Digite a quantidade desejada.`;
+}
   }
 }
   
