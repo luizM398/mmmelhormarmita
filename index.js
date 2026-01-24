@@ -9,9 +9,11 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// ================== FUNÇÕES DE SAUDAÇÃO E INATIVIDADE ==================
+// ================== CONFIGURAÇÕES ==================
+const TEMPO_INATIVO = 10 * 60 * 1000; // 10 minutos em milissegundos
+// Para testes rápidos, você pode colocar 30 * 1000 (30 segundos)
 
-// Função para enviar a saudação
+// ================== SAUDAÇÃO ==================
 function enviarSaudacao(cliente) {
   cliente.estado = 'MENU';
   return (
@@ -25,22 +27,14 @@ function enviarSaudacao(cliente) {
   );
 }
 
-// Função para checar inatividade (10 minutos)
-function verificarInatividade(cliente) {
-  const agora = new Date();
-
-  if (cliente.ultimoContato && (agora - cliente.ultimoContato) > 10 * 60 * 1000) { // 10 minutos
-    cliente.estado = 'FINALIZADO';
-    cliente.recebeuSaudacao = false; // permite saudação na próxima vez
-    return true; // indica que o cliente estava inativo
-  }
-
-  cliente.ultimoContato = agora;
-  return false;
+// ================== FUNÇÃO PARA VERIFICAR INATIVIDADE ==================
+function verificaInatividade(cliente) {
+  if (!cliente.ultimoContato) return false;
+  const agora = Date.now();
+  return agora - cliente.ultimoContato > TEMPO_INATIVO;
 }
 
 // ================== ROTAS BÁSICAS ==================
-
 app.get('/', (req, res) => {
   res.send('Servidor rodando');
 });
@@ -62,7 +56,6 @@ app.post('/webhook', (req, res) => {
 });
 
 // ================== ROTA PRINCIPAL ==================
-
 app.post('/mensagem', (req, res) => {
   const { numero, texto } = req.body;
 
@@ -73,11 +66,25 @@ app.post('/mensagem', (req, res) => {
   const cliente = estadoClientes.getEstado(numero);
   let resposta = '';
 
-  // ================== CHECAGEM DE SAUDAÇÃO E INATIVIDADE ==================
-  if (verificarInatividade(cliente) || !cliente.recebeuSaudacao || cliente.estado === 'FINALIZADO') {
+  // Atualiza último contato
+  cliente.ultimoContato = Date.now();
+
+  // ================== VERIFICA INATIVIDADE ==================
+  if (verificaInatividade(cliente)) {
+    cliente.estado = 'MENU';
+    cliente.recebeuSaudacao = false;
+    resposta =
+      "⚠️ Seu atendimento foi encerrado por inatividade. Vamos reiniciar o atendimento.\n\n" +
+      enviarSaudacao(cliente);
+    return res.json({ resposta });
+  }
+
+  // ================== SAUDAÇÃO ==================
+  if (!cliente.recebeuSaudacao || cliente.estado === 'FINALIZADO') {
     cliente.recebeuSaudacao = true;
-    const saudacao = enviarSaudacao(cliente);
-    return res.json({ resposta: saudacao });
+    cliente.estado = 'MENU';
+    resposta = enviarSaudacao(cliente);
+    return res.json({ resposta });
   }
 
   // ================== MENU ==================
@@ -170,7 +177,8 @@ app.post('/mensagem', (req, res) => {
 
     if (cliente.precisaStrogonoff) {
       cliente.estado = 'VARIACAO_STROGONOFF';
-      resposta = `🍛 Escolha a variação do strogonoff:\n1️⃣ Tradicional\n2️⃣ Light`;
+      resposta =
+        `🍛 Escolha a variação do strogonoff:\n1️⃣ Tradicional\n2️⃣ Light`;
     } else {
       cliente.estado = 'QUANTIDADE';
       resposta = 'Digite a quantidade desejada.';
@@ -196,7 +204,6 @@ app.post('/mensagem', (req, res) => {
     } else {
       cliente.pedido[0].quantidade = qtd;
 
-      // Agora perguntamos se quer adicionar mais pratos
       cliente.estado = 'ADICIONAR_OUTRO';
       resposta = `✅ Pedido anotado!\n\nDeseja adicionar mais pratos?\n1️⃣ Sim\n2️⃣ Não`;
     }
@@ -205,7 +212,6 @@ app.post('/mensagem', (req, res) => {
   // ================== ADICIONAR OUTRO PRATO ==================
   else if (cliente.estado === 'ADICIONAR_OUTRO') {
     if (texto === '1') {
-      // Cliente quer adicionar mais pratos
       cliente.estado = 'ESCOLHENDO_PRATO';
       const arquivo = path.join(__dirname, 'menu.xlsx');
       const workbook = xlsx.readFile(arquivo);
@@ -222,7 +228,6 @@ app.post('/mensagem', (req, res) => {
       resposta = lista;
 
     } else if (texto === '2') {
-      // Cliente não quer adicionar mais pratos → agora pede endereço
       cliente.estado = 'AGUARDANDO_ENDERECO';
       resposta = 'Por favor, informe seu endereço de entrega.';
     } else {
