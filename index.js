@@ -161,21 +161,48 @@ app.post('/mensagem', (req, res) => {
 
 // ================== QUANTIDADE ==================
 
-  else if (cliente.estado === 'QUANTIDADE') {
-    const qtd = parseInt(texto);
+else if (cliente.estado === 'QUANTIDADE') {
+  const qtd = parseInt(texto);
 
-    if (isNaN(qtd) || qtd < 1) {
-      resposta = 'Digite uma quantidade válida.';
-    } else {
-      cliente.pedido[0].quantidade = qtd;
-      cliente.estado = 'MENU';
-      resposta = '✅ Pedido anotado! Volte ao menu.';
-    }
+  if (isNaN(qtd) || qtd < 1) {
+    resposta = 'Digite uma quantidade válida.';
+  } else {
+    cliente.pedido[0].quantidade = qtd;
+
+    // Agora perguntamos se quer adicionar mais pratos
+    cliente.estado = 'ADICIONAR_OUTRO';
+    resposta = `✅ Pedido anotado!\n\nDeseja adicionar mais pratos?\n1️⃣ Sim\n2️⃣ Não`;
   }
+}
 
-  res.json({ resposta });
-});
+// ================== ADICIONAR OUTRO PRATO ==================
 
+else if (cliente.estado === 'ADICIONAR_OUTRO') {
+  if (texto === '1') {
+    // Cliente quer adicionar mais pratos
+    cliente.estado = 'ESCOLHENDO_PRATO';
+    const arquivo = path.join(__dirname, 'menu.xlsx');
+    const workbook = xlsx.readFile(arquivo);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const dados = xlsx.utils.sheet_to_json(sheet);
+
+    cliente.opcoesPrato = dados;
+
+    let lista = '🍽️ Escolha um prato:\n\n';
+    dados.forEach((item, index) => {
+      lista += `${index + 1}️⃣ ${item['PRATO']}\n`;
+    });
+
+    resposta = lista;
+
+  } else if (texto === '2') {
+    // Cliente finalizou o pedido
+    cliente.estado = 'MENU';
+    resposta = '✅ Pedido finalizado! Volte ao menu para novas opções.';
+  } else {
+    resposta = 'Escolha uma opção válida: 1️⃣ Sim ou 2️⃣ Não';
+  }
+}
 // ================== SERVER ==================
 
 app.listen(PORT, () => {
