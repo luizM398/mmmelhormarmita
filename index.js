@@ -203,6 +203,7 @@ else if (cliente.estado === 'ADICIONAR_OUTRO') {
     resposta = 'Escolha uma opção válida: 1️⃣ Sim ou 2️⃣ Não';
   }
 }
+}
 // ================== SERVER ==================
 
 app.listen(PORT, () => {
