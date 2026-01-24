@@ -9,13 +9,11 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// ================== SAUDAÇÃO ==================
+// ================== FUNÇÕES DE SAUDAÇÃO E INATIVIDADE ==================
 
 // Função para enviar a saudação
 function enviarSaudacao(cliente) {
-  // Atualiza o estado inicial para MENU
   cliente.estado = 'MENU';
-
   return (
     `👋 Olá! Bem-vindo(a) à Melhor Marmita!\n` +
     `Aqui você encontra comidas de qualidade, saborosas e fresquinhas. 😋\n` +
@@ -25,6 +23,20 @@ function enviarSaudacao(cliente) {
     `2️⃣ Fazer um pedido\n` +
     `3️⃣ Sugestões`
   );
+}
+
+// Função para checar inatividade (10 minutos)
+function verificarInatividade(cliente) {
+  const agora = new Date();
+
+  if (cliente.ultimoContato && (agora - cliente.ultimoContato) > 10 * 60 * 1000) { // 10 minutos
+    cliente.estado = 'FINALIZADO';
+    cliente.recebeuSaudacao = false; // permite saudação na próxima vez
+    return true; // indica que o cliente estava inativo
+  }
+
+  cliente.ultimoContato = agora;
+  return false;
 }
 
 // ================== ROTAS BÁSICAS ==================
@@ -61,20 +73,15 @@ app.post('/mensagem', (req, res) => {
   const cliente = estadoClientes.getEstado(numero);
   let resposta = '';
 
-  // Verifica se o cliente é novo ou precisa de saudação
-if (!cliente.recebeuSaudacao || cliente.estado === 'FINALIZADO' || cliente.inativoMaisDe10Min) {
-  cliente.recebeuSaudacao = true; // marca que ele recebeu
-  cliente.inativoMaisDe10Min = false; // reseta a flag de inatividade
-  cliente.estado = 'MENU'; // garante que o estado volta para o menu inicial
+  // ================== CHECAGEM DE SAUDAÇÃO E INATIVIDADE ==================
+  if (verificarInatividade(cliente) || !cliente.recebeuSaudacao || cliente.estado === 'FINALIZADO') {
+    cliente.recebeuSaudacao = true;
+    const saudacao = enviarSaudacao(cliente);
+    return res.json({ resposta: saudacao });
+  }
 
-  const saudacao = enviarSaudacao(cliente);
-  return res.json({ resposta: saudacao });
-}
-
-// ================== MENU ==================
-
+  // ================== MENU ==================
   if (cliente.estado === 'MENU') {
-
     if (texto === '1') {
       try {
         const arquivo = path.join(__dirname, 'menu.xlsx');
@@ -117,8 +124,7 @@ if (!cliente.recebeuSaudacao || cliente.estado === 'FINALIZADO' || cliente.inati
     }
   }
 
-// ================== ESCOLHA DO PRATO ==================
-
+  // ================== ESCOLHA DO PRATO ==================
   else if (cliente.estado === 'ESCOLHENDO_PRATO') {
     const escolha = parseInt(texto);
 
@@ -156,8 +162,7 @@ if (!cliente.recebeuSaudacao || cliente.estado === 'FINALIZADO' || cliente.inati
     }
   }
 
-// ================== VARIAÇÃO ARROZ ==================
-
+  // ================== VARIAÇÃO ARROZ ==================
   else if (cliente.estado === 'VARIACAO_ARROZ') {
     if (texto === '1') cliente.pedido[0].arroz = 'Branco';
     else if (texto === '2') cliente.pedido[0].arroz = 'Integral';
@@ -165,16 +170,14 @@ if (!cliente.recebeuSaudacao || cliente.estado === 'FINALIZADO' || cliente.inati
 
     if (cliente.precisaStrogonoff) {
       cliente.estado = 'VARIACAO_STROGONOFF';
-      resposta =
-        `🍛 Escolha a variação do strogonoff:\n1️⃣ Tradicional\n2️⃣ Light`;
+      resposta = `🍛 Escolha a variação do strogonoff:\n1️⃣ Tradicional\n2️⃣ Light`;
     } else {
       cliente.estado = 'QUANTIDADE';
       resposta = 'Digite a quantidade desejada.';
     }
   }
 
-// ================== VARIAÇÃO STROGONOFF ==================
-
+  // ================== VARIAÇÃO STROGONOFF ==================
   else if (cliente.estado === 'VARIACAO_STROGONOFF') {
     if (texto === '1') cliente.pedido[0].strogonoff = 'Tradicional';
     else if (texto === '2') cliente.pedido[0].strogonoff = 'Light';
@@ -184,8 +187,7 @@ if (!cliente.recebeuSaudacao || cliente.estado === 'FINALIZADO' || cliente.inati
     resposta = 'Digite a quantidade desejada.';
   }
 
-// ================== QUANTIDADE ==================
-
+  // ================== QUANTIDADE ==================
   else if (cliente.estado === 'QUANTIDADE') {
     const qtd = parseInt(texto);
 
@@ -200,51 +202,46 @@ if (!cliente.recebeuSaudacao || cliente.estado === 'FINALIZADO' || cliente.inati
     }
   }
 
-// ================== ADICIONAR OUTRO PRATO ==================
-else if (cliente.estado === 'ADICIONAR_OUTRO') {
-  if (texto === '1') {
-    // Cliente quer adicionar mais pratos
-    cliente.estado = 'ESCOLHENDO_PRATO';
-    const arquivo = path.join(__dirname, 'menu.xlsx');
-    const workbook = xlsx.readFile(arquivo);
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const dados = xlsx.utils.sheet_to_json(sheet);
+  // ================== ADICIONAR OUTRO PRATO ==================
+  else if (cliente.estado === 'ADICIONAR_OUTRO') {
+    if (texto === '1') {
+      // Cliente quer adicionar mais pratos
+      cliente.estado = 'ESCOLHENDO_PRATO';
+      const arquivo = path.join(__dirname, 'menu.xlsx');
+      const workbook = xlsx.readFile(arquivo);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const dados = xlsx.utils.sheet_to_json(sheet);
 
-    cliente.opcoesPrato = dados;
+      cliente.opcoesPrato = dados;
 
-    let lista = '🍽️ Escolha um prato:\n\n';
-    dados.forEach((item, index) => {
-      lista += `${index + 1}️⃣ ${item['PRATO']}\n`;
-    });
+      let lista = '🍽️ Escolha um prato:\n\n';
+      dados.forEach((item, index) => {
+        lista += `${index + 1}️⃣ ${item['PRATO']}\n`;
+      });
 
-    resposta = lista;
+      resposta = lista;
 
-  } else if (texto === '2') {
-    // Cliente não quer adicionar mais pratos → agora pede endereço
-    cliente.estado = 'AGUARDANDO_ENDERECO';
-    resposta = 'Por favor, informe seu endereço de entrega.';
-  } else {
-    resposta = 'Escolha uma opção válida: 1️⃣ Sim ou 2️⃣ Não';
+    } else if (texto === '2') {
+      // Cliente não quer adicionar mais pratos → agora pede endereço
+      cliente.estado = 'AGUARDANDO_ENDERECO';
+      resposta = 'Por favor, informe seu endereço de entrega.';
+    } else {
+      resposta = 'Escolha uma opção válida: 1️⃣ Sim ou 2️⃣ Não';
+    }
   }
-}
 
-// ================== AGUARDANDO ENDEREÇO ==================
-else if (cliente.estado === 'AGUARDANDO_ENDERECO') {
-  // Salva o endereço do cliente
-  cliente.endereco = texto;
+  // ================== AGUARDANDO ENDEREÇO ==================
+  else if (cliente.estado === 'AGUARDANDO_ENDERECO') {
+    cliente.endereco = texto;
+    cliente.estado = 'AGUARDANDO_FRETE';
+    resposta = '✅ Recebido! Aguarde enquanto calculamos seu frete.';
+  }
 
-  // Muda para o próximo estado que você vai usar para calcular frete
-  cliente.estado = 'AGUARDANDO_FRETE';
-
-  resposta = '✅ Recebido! Aguarde enquanto calculamos seu frete.';
-}
-// ================== RESPONDER ==================
-
+  // ================== RESPONDER ==================
   res.json({ resposta });
-}); // <-- FECHA CORRETAMENTE O APP.POST
+});
 
 // ================== SERVER ==================
-
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
