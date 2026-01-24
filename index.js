@@ -9,6 +9,24 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
+// ================== SAUDAÇÃO ==================
+
+// Função para enviar a saudação
+function enviarSaudacao(cliente) {
+  // Atualiza o estado inicial para MENU
+  cliente.estado = 'MENU';
+
+  return (
+    `👋 Olá! Bem-vindo(a) à Melhor Marmita!\n` +
+    `Aqui você encontra comidas de qualidade, saborosas e fresquinhas. 😋\n` +
+    `✨ Qualidade e sabor garantidos!\n\n` +
+    `O que você deseja hoje?\n` +
+    `1️⃣ Ver o cardápio\n` +
+    `2️⃣ Fazer um pedido\n` +
+    `3️⃣ Sugestões`
+  );
+}
+
 // ================== ROTAS BÁSICAS ==================
 
 app.get('/', (req, res) => {
@@ -42,6 +60,16 @@ app.post('/mensagem', (req, res) => {
 
   const cliente = estadoClientes.getEstado(numero);
   let resposta = '';
+
+  // Verifica se o cliente é novo ou precisa de saudação
+if (!cliente.recebeuSaudacao || cliente.estado === 'FINALIZADO' || cliente.inativoMaisDe10Min) {
+  cliente.recebeuSaudacao = true; // marca que ele recebeu
+  cliente.inativoMaisDe10Min = false; // reseta a flag de inatividade
+  cliente.estado = 'MENU'; // garante que o estado volta para o menu inicial
+
+  const saudacao = enviarSaudacao(cliente);
+  return res.json({ resposta: saudacao });
+}
 
 // ================== MENU ==================
 
