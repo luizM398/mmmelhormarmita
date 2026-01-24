@@ -173,34 +173,43 @@ app.post('/mensagem', (req, res) => {
   }
 
 // ================== ADICIONAR OUTRO PRATO ==================
+else if (cliente.estado === 'ADICIONAR_OUTRO') {
+  if (texto === '1') {
+    // Cliente quer adicionar mais pratos
+    cliente.estado = 'ESCOLHENDO_PRATO';
+    const arquivo = path.join(__dirname, 'menu.xlsx');
+    const workbook = xlsx.readFile(arquivo);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const dados = xlsx.utils.sheet_to_json(sheet);
 
-  else if (cliente.estado === 'ADICIONAR_OUTRO') {
-    if (texto === '1') {
-      // Cliente quer adicionar mais pratos
-      cliente.estado = 'ESCOLHENDO_PRATO';
-      const arquivo = path.join(__dirname, 'menu.xlsx');
-      const workbook = xlsx.readFile(arquivo);
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const dados = xlsx.utils.sheet_to_json(sheet);
+    cliente.opcoesPrato = dados;
 
-      cliente.opcoesPrato = dados;
+    let lista = '🍽️ Escolha um prato:\n\n';
+    dados.forEach((item, index) => {
+      lista += `${index + 1}️⃣ ${item['PRATO']}\n`;
+    });
 
-      let lista = '🍽️ Escolha um prato:\n\n';
-      dados.forEach((item, index) => {
-        lista += `${index + 1}️⃣ ${item['PRATO']}\n`;
-      });
+    resposta = lista;
 
-      resposta = lista;
-
-    } else if (texto === '2') {
-      // Cliente finalizou o pedido
-      cliente.estado = 'MENU';
-      resposta = '✅ Pedido finalizado! Volte ao menu para novas opções.';
-    } else {
-      resposta = 'Escolha uma opção válida: 1️⃣ Sim ou 2️⃣ Não';
-    }
+  } else if (texto === '2') {
+    // Cliente não quer adicionar mais pratos → agora pede endereço
+    cliente.estado = 'AGUARDANDO_ENDERECO';
+    resposta = 'Por favor, informe seu endereço de entrega.';
+  } else {
+    resposta = 'Escolha uma opção válida: 1️⃣ Sim ou 2️⃣ Não';
   }
+}
 
+// ================== AGUARDANDO ENDEREÇO ==================
+else if (cliente.estado === 'AGUARDANDO_ENDERECO') {
+  // Salva o endereço do cliente
+  cliente.endereco = texto;
+
+  // Muda para o próximo estado que você vai usar para calcular frete
+  cliente.estado = 'AGUARDANDO_FRETE';
+
+  resposta = '✅ Recebido! Aguarde enquanto calculamos seu frete.';
+}
 // ================== RESPONDER ==================
 
   res.json({ resposta });
