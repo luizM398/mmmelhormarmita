@@ -39,6 +39,46 @@ app.post('/webhook', (req, res) => {
   res.status(200).send('ok');
 });
 
+app.post('/mensagem', (req, res) => {
+  const { numero, texto } = req.body;
+
+  if (!numero || !texto) {
+    return res.status(400).json({
+      erro: 'Informe numero e texto'
+    });
+  }
+
+  const cliente = estadoClientes.getEstado(numero);
+  let resposta = '';
+
+  if (cliente.estado === 'MENU') {
+    if (texto === '1') {
+      resposta = mensagens.menuPrincipal;
+    } else if (texto === '2') {
+      cliente.estado = 'PEDIDO';
+      resposta = 'Pedido iniciado. Em breve vamos listar os pratos.';
+    } else if (texto === '3') {
+      cliente.estado = 'ELOGIO';
+      resposta = mensagens.elogios;
+    } else {
+      resposta = mensagens.menuPrincipal;
+    }
+  }
+
+  else if (cliente.estado === 'ELOGIO') {
+    cliente.estado = 'MENU';
+    resposta = mensagens.agradecimento + '\n\n' + mensagens.menuPrincipal;
+  }
+
+  else if (cliente.estado === 'PEDIDO') {
+    resposta = 'Fluxo de pedido em construção.';
+  }
+
+  res.json({
+    resposta
+  });
+});
+
 // inicia o servidor
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
