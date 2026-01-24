@@ -176,6 +176,16 @@ app.post('/mensagem', (req, res) => {
     return res.json({ resposta });
   }
 
+      if (cliente.precisaEstrogonofe) {
+    cliente.estado = 'VARIACAO_ESTROGONOFE';
+    resposta =
+      `🍛 Escolha a variação do estrogonofe:\n` +
+      `1️⃣ Tradicional\n` +
+      `2️⃣ Light`;
+  } else {
+    cliente.estado = 'QUANTIDADE';
+    resposta = 'Digite a quantidade desejada.';
+  }
  
 }
 
