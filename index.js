@@ -51,9 +51,27 @@ app.post('/mensagem', (req, res) => {
   const cliente = estadoClientes.getEstado(numero);
   let resposta = '';
 
-  if (cliente.estado === 'MENU') {
-    if (texto === '1') {
-      resposta = mensagens.menuPrincipal;
+ if (texto === '1') {
+  try {
+    const arquivo = path.join(__dirname, 'menu.xlsx');
+    const workbook = xlsx.readFile(arquivo);
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const dados = xlsx.utils.sheet_to_json(sheet);
+
+    let lista = '🍱 Cardápio:\n\n';
+
+    dados.forEach(item => {
+      lista += `${item.codigo}️⃣ ${item.nome}\n`;
+    });
+
+    lista += '\n🔥 A partir de 5 marmitas: R$ 17,49/unidade';
+
+    resposta = lista;
+  } catch (erro) {
+    resposta = 'Erro ao carregar o cardápio.';
+  }
+}
     } else if (texto === '2') {
       cliente.estado = 'PEDIDO';
       resposta = 'Pedido iniciado. Em breve vamos listar os pratos.';
