@@ -76,10 +76,29 @@ app.post('/mensagem', (req, res) => {
       }
 
     } else if (texto === '2') {
-      cliente.estado = 'PEDIDO';
-      resposta = 'Pedido iniciado. Em breve vamos listar os pratos.';
+  try {
+    const arquivo = path.join(__dirname, 'menu.xlsx');
+    const workbook = xlsx.readFile(arquivo);
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const dados = xlsx.utils.sheet_to_json(sheet);
 
-    } else if (texto === '3') {
+    let lista = '🍽️ Escolha um prato:\n\n';
+
+    dados.forEach((item, index) => {
+      lista += `${index + 1}️⃣ ${item['PRATO']}\n`;
+    });
+
+    cliente.estado = 'ESCOLHENDO_PRATO';
+    cliente.opcoesPrato = dados;
+
+    resposta = lista;
+
+  } catch (erro) {
+    resposta = 'Erro ao carregar os pratos.';
+  }
+}
+      else if (texto === '3') {
       cliente.estado = 'ELOGIO';
       resposta = mensagens.elogios;
 
