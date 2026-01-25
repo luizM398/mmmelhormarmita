@@ -129,7 +129,7 @@ app.post('/mensagem', (req, res) => {
 
       cardapio +=
         `\n🔥 *Promoção*\n` +
-        `A partir de *5 marmitas*, o valor cai para *R$ 17,49* por unidade.\n\n` +
+        `A partir de *5 marmitas*, o valor de ~~R$ 19,99~~ cai para *R$ 17,49* por unidade.\n\n` +
         `1️⃣ Fazer pedido\n` +
         `2️⃣ Voltar ao menu`;
 
