@@ -41,11 +41,11 @@ return Date.now() - cliente.ultimoContato > TEMPO_INATIVO;
 }
 
 function erroComUltimaMensagem(cliente) {
-return (
-❌ Não entendi sua resposta.\n +
-Por favor, escolha uma das opções abaixo 👇\n\n +
-cliente.ultimaMensagem
-);
+  return (
+    `❌ Não entendi sua resposta.\n` +
+    `Por favor, escolha uma das opções abaixo 👇\n\n` +
+    cliente.ultimaMensagem
+  );
 }
 
 // ================= ROTAS =================
