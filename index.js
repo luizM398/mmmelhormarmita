@@ -69,6 +69,18 @@ app.post('/mensagem', (req, res) => {
   // Atualiza último contato
   cliente.ultimoContato = Date.now();
 
+  // ================== CANCELAMENTO GLOBAL ==================
+  if (texto.trim().toLowerCase() === 'cancelar') {
+    estadoClientes.limparPedido(numero);
+    cliente.recebeuSaudacao = false;
+
+    resposta =
+      '❌ Seu pedido foi cancelado com sucesso.\n\n' +
+      enviarSaudacao(cliente);
+
+    return res.json({ resposta });
+  }
+
   // ================== VERIFICA INATIVIDADE ==================
   if (verificaInatividade(cliente)) {
     cliente.estado = 'MENU';
