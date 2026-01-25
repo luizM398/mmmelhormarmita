@@ -73,16 +73,15 @@ if (mensagem === 'cancelar') {
   estadoClientes.limparPedido(numero);
 
   cliente.estado = 'MENU';
-  cliente.recebeuSaudacao = true;
+  cliente.recebeuSaudacao = true; // mantém como já saudado
 
   resposta =
     '❌ Seu pedido foi cancelado com sucesso.\n\n' +
-    mensagemSaudacao() +
-    mensagemMenu();
+    mensagemMenu(); // ⚠️ SOMENTE menu
 
   return res.json({ resposta });
 }
-
+  
   // ================== SAUDAÇÃO ==================
  
 if (!cliente.recebeuSaudacao || cliente.estado === 'FINALIZADO') {
