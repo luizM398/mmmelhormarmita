@@ -2,251 +2,320 @@ const express = require('express');
 const xlsx = require('xlsx');
 const path = require('path');
 const estadoClientes = require('./estadoClientes');
-const mensagens = require('./mensagens');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// ================== CONFIGURAÇÕES ==================
-const TEMPO_INATIVO = 10 * 60 * 1000; // 10 minutos em milissegundos
-// Para testes rápidos, você pode colocar 30 * 1000 (30 segundos)
+const TEMPO_INATIVO = 10 * 60 * 1000;
 
-// ================== SAUDAÇÃO ==================
-function enviarSaudacao(cliente) {
-  cliente.estado = 'MENU';
-  return (
-    `👋 Olá! Bem-vindo(a) à Melhor Marmita!\n` +
-    `Aqui você encontra comidas de qualidade, saborosas e fresquinhas. 😋\n` +
-    `✨ Qualidade e sabor garantidos!\n\n` +
-    `O que você deseja hoje?\n` +
-    `1️⃣ Ver o cardápio\n` +
-    `2️⃣ Fazer um pedido\n` +
-    `3️⃣ Sugestões`
-  );
+// ================= FUNÇÕES AUXILIARES =================
+
+function saudacaoTexto() {
+return (
+👋 Olá! Seja muito bem-vindo(a) à *Melhor Marmita* 🍱\n +
+Comida caseira, saborosa e feita com carinho para o seu dia a dia 😋
+);
 }
 
-// ================== FUNÇÃO PARA VERIFICAR INATIVIDADE ==================
-function verificaInatividade(cliente) {
-  if (!cliente.ultimoContato) return false;
-  const agora = Date.now();
-  return agora - cliente.ultimoContato > TEMPO_INATIVO;
+function menuPrincipal() {
+return (
+\n\nO que você deseja hoje?\n\n +
+1️⃣ Ver cardápio\n +
+2️⃣ Fazer pedido\n +
+3️⃣ Elogios e Reclamações
+);
 }
 
-// ================== ROTAS BÁSICAS ==================
+function carregarMenu() {
+const arquivo = path.join(__dirname, 'menu.xlsx');
+const workbook = xlsx.readFile(arquivo);
+const sheet = workbook.Sheets[workbook.SheetNames[0]];
+return xlsx.utils.sheet_to_json(sheet);
+}
+
+function encerrouPorInatividade(cliente) {
+if (!cliente.ultimoContato) return false;
+return Date.now() - cliente.ultimoContato > TEMPO_INATIVO;
+}
+
+function erroComUltimaMensagem(cliente) {
+return (
+❌ Não entendi sua resposta.\n +
+Por favor, escolha uma das opções abaixo 👇\n\n +
+cliente.ultimaMensagem
+);
+}
+
+// ================= ROTAS =================
+
 app.get('/', (req, res) => {
-  res.send('Servidor rodando');
+res.send('Servidor rodando');
 });
 
-app.get('/menu', (req, res) => {
-  try {
-    const arquivo = path.join(__dirname, 'menu.xlsx');
-    const workbook = xlsx.readFile(arquivo);
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const dados = xlsx.utils.sheet_to_json(sheet);
-    res.json(dados);
-  } catch (erro) {
-    res.status(500).send('Erro ao ler o menu');
-  }
-});
-
-app.post('/webhook', (req, res) => {
-  res.status(200).send('ok');
-});
-
-// ================== ROTA PRINCIPAL ==================
 app.post('/mensagem', (req, res) => {
-  const { numero, texto } = req.body;
+const { numero, texto } = req.body;
+const mensagem = texto.trim().toLowerCase();
 
-  if (!numero || !texto) {
-    return res.status(400).json({ erro: 'Informe numero e texto' });
-  }
+if (!numero || !texto) {
+return res.status(400).json({ erro: 'Número e texto obrigatórios' });
+}
 
-  const cliente = estadoClientes.getEstado(numero);
-  let resposta = '';
+const cliente = estadoClientes.getEstado(numero);
+let resposta = '';
 
-  // Atualiza último contato
-  cliente.ultimoContato = Date.now();
+cliente.ultimoContato = Date.now();
 
-  // ================== VERIFICA INATIVIDADE ==================
-  if (verificaInatividade(cliente)) {
-    cliente.estado = 'MENU';
-    cliente.recebeuSaudacao = false;
-    resposta =
-      "⚠️ Seu atendimento foi encerrado por inatividade. Vamos reiniciar o atendimento.\n\n" +
-      enviarSaudacao(cliente);
-    return res.json({ resposta });
-  }
+// ===== INATIVIDADE =====
+if (encerrouPorInatividade(cliente)) {
+estadoClientes.limparPedido(numero);
+resposta =
+⏰ Seu atendimento foi encerrado por inatividade.\n\n +
+saudacaoTexto() +
+menuPrincipal();
+cliente.ultimaMensagem = resposta;
+return res.json({ resposta });
+}
 
-  // ================== SAUDAÇÃO ==================
-  if (!cliente.recebeuSaudacao || cliente.estado === 'FINALIZADO') {
-    cliente.recebeuSaudacao = true;
-    cliente.estado = 'MENU';
-    resposta = enviarSaudacao(cliente);
-    return res.json({ resposta });
-  }
+// ===== PRIMEIRO CONTATO =====
+if (!cliente.recebeuSaudacao) {
+cliente.recebeuSaudacao = true;
+cliente.estado = 'MENU';
+resposta = saudacaoTexto() + menuPrincipal();
+cliente.ultimaMensagem = resposta;
+return res.json({ resposta });
+}
 
-  // ================== MENU ==================
-  if (cliente.estado === 'MENU') {
-    if (texto === '1') {
-      try {
-        const arquivo = path.join(__dirname, 'menu.xlsx');
-        const workbook = xlsx.readFile(arquivo);
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const dados = xlsx.utils.sheet_to_json(sheet);
+// ===== CANCELAR =====
+if (mensagem === 'cancelar') {
+cliente.estado = 'CONFIRMAR_CANCELAMENTO';
+resposta =
+⚠️ Tem certeza que deseja cancelar o pedido?\n\n +
+1️⃣ Sim, cancelar\n +
+2️⃣ Não, continuar;
+cliente.ultimaMensagem = resposta;
+return res.json({ resposta });
+}
 
-        let lista = '🍱 Cardápio:\n\n';
-        dados.forEach(item => {
-          lista += `${item['CÓDIGO']}️⃣ ${item['PRATO']} - R$ ${item['VALOR']}\n`;
-        });
+if (cliente.estado === 'CONFIRMAR_CANCELAMENTO') {
+if (mensagem === '1') {
+estadoClientes.limparPedido(numero);
+resposta =
+❌ Pedido cancelado com sucesso.\n\n +
+saudacaoTexto() +
+menuPrincipal();
+cliente.ultimaMensagem = resposta;
+return res.json({ resposta });
+}
+if (mensagem === '2') {
+cliente.estado = 'MENU';
+resposta = menuPrincipal();
+cliente.ultimaMensagem = resposta;
+return res.json({ resposta });
+}
+return res.json({ resposta: erroComUltimaMensagem(cliente) });
+}
 
-        resposta = lista;
-      } catch {
-        resposta = 'Erro ao carregar o cardápio.';
-      }
+// ================= MENU =================
+if (cliente.estado === 'MENU') {
+if (mensagem === '1') {
+const dados = carregarMenu();
+let cardapio = 🍱 *Cardápio*\n\n;
 
-    } else if (texto === '2') {
-      try {
-        const arquivo = path.join(__dirname, 'menu.xlsx');
-        const workbook = xlsx.readFile(arquivo);
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const dados = xlsx.utils.sheet_to_json(sheet);
+dados.forEach(item => {  
+    cardapio += `• ${item.PRATO} — R$ ${item.VALOR}\n`;  
+  });  
 
-        let lista = '🍽️ Escolha um prato:\n\n';
-        dados.forEach((item, index) => {
-          lista += `${index + 1}️⃣ ${item['PRATO']}\n`;
-        });
+  cardapio +=  
+    `\n🔥 *Promoção*\n` +  
+    `A partir de *5 marmitas*, o valor cai para *R$ 17,49* por unidade.\n\n` +  
+    `1️⃣ Fazer pedido\n` +  
+    `2️⃣ Voltar ao menu`;  
 
-        cliente.estado = 'ESCOLHENDO_PRATO';
-        cliente.opcoesPrato = dados;
+  cliente.estado = 'CARDAPIO';  
+  cliente.ultimaMensagem = cardapio;  
+  return res.json({ resposta: cardapio });  
+}  
 
-        resposta = lista;
-      } catch {
-        resposta = 'Erro ao carregar os pratos.';
-      }
+if (mensagem === '2') {  
+  const dados = carregarMenu();  
+  let lista = `🍽️ Escolha um prato:\n\n`;  
 
-    } else {
-      resposta = mensagens.menuPrincipal;
-    }
-  }
+  dados.forEach((item, i) => {  
+    lista += `${i + 1}️⃣ ${item.PRATO}\n`;  
+  });  
 
-  // ================== ESCOLHA DO PRATO ==================
-  else if (cliente.estado === 'ESCOLHENDO_PRATO') {
-    const escolha = parseInt(texto);
+  lista += `\n0️⃣ Voltar ao menu`;  
 
-    if (isNaN(escolha) || escolha < 1 || escolha > cliente.opcoesPrato.length) {
-      resposta = 'Escolha um número válido.';
-    } else {
-      const prato = cliente.opcoesPrato[escolha - 1];
-      const nome = prato['PRATO'].toLowerCase();
+  cliente.estado = 'ESCOLHENDO_PRATO';  
+  cliente.opcoesPrato = dados;  
+  cliente.ultimaMensagem = lista;  
+  return res.json({ resposta: lista });  
+}  
 
-      cliente.pedido = [{
-        prato: prato['PRATO'],
-        valor: prato['VALOR'],
-        arroz: null,
-        strogonoff: null,
-        quantidade: 0
-      }];
+if (mensagem === '3') {  
+  cliente.estado = 'ELOGIOS';  
+  resposta =  
+    `💬 Elogios ou reclamações\n\n` +  
+    `Escreva sua mensagem abaixo.\n\n` +  
+    `0️⃣ Voltar ao menu`;  
+  cliente.ultimaMensagem = resposta;  
+  return res.json({ resposta });  
+}  
 
-      cliente.precisaArroz = nome.includes('arroz');
-      cliente.precisaStrogonoff = nome.includes('strogon');
+return res.json({ resposta: erroComUltimaMensagem(cliente) });
 
-      if (cliente.precisaArroz) {
-        cliente.estado = 'VARIACAO_ARROZ';
-        resposta =
-          `🍚 ${prato['PRATO']}\n\nEscolha o tipo de arroz:\n1️⃣ Branco\n2️⃣ Integral`;
-      } 
-      else if (cliente.precisaStrogonoff) {
-        cliente.estado = 'VARIACAO_STROGONOFF';
-        resposta =
-          `🍛 ${prato['PRATO']}\n\nEscolha a variação do strogonoff:\n1️⃣ Tradicional\n2️⃣ Light`;
-      } 
-      else {
-        cliente.estado = 'QUANTIDADE';
-        resposta = 'Digite a quantidade desejada.';
-      }
-    }
-  }
+}
 
-  // ================== VARIAÇÃO ARROZ ==================
-  else if (cliente.estado === 'VARIACAO_ARROZ') {
-    if (texto === '1') cliente.pedido[0].arroz = 'Branco';
-    else if (texto === '2') cliente.pedido[0].arroz = 'Integral';
-    else return res.json({ resposta: 'Escolha 1 ou 2.' });
+// ================= CARDÁPIO =================
+if (cliente.estado === 'CARDAPIO') {
+if (mensagem === '1') {
+cliente.estado = 'MENU';
+return res.json({ resposta: menuPrincipal() });
+}
+if (mensagem === '2') {
+cliente.estado = 'MENU';
+return res.json({ resposta: menuPrincipal() });
+}
+return res.json({ resposta: erroComUltimaMensagem(cliente) });
+}
 
-    if (cliente.precisaStrogonoff) {
-      cliente.estado = 'VARIACAO_STROGONOFF';
-      resposta =
-        `🍛 Escolha a variação do strogonoff:\n1️⃣ Tradicional\n2️⃣ Light`;
-    } else {
-      cliente.estado = 'QUANTIDADE';
-      resposta = 'Digite a quantidade desejada.';
-    }
-  }
+// ================= ESCOLHENDO PRATO =================
+if (cliente.estado === 'ESCOLHENDO_PRATO') {
+if (mensagem === '0') {
+cliente.estado = 'MENU';
+return res.json({ resposta: menuPrincipal() });
+}
 
-  // ================== VARIAÇÃO STROGONOFF ==================
-  else if (cliente.estado === 'VARIACAO_STROGONOFF') {
-    if (texto === '1') cliente.pedido[0].strogonoff = 'Tradicional';
-    else if (texto === '2') cliente.pedido[0].strogonoff = 'Light';
-    else return res.json({ resposta: 'Escolha 1 ou 2.' });
+const escolha = parseInt(mensagem);  
+if (isNaN(escolha) || escolha < 1 || escolha > cliente.opcoesPrato.length) {  
+  return res.json({ resposta: erroComUltimaMensagem(cliente) });  
+}  
 
-    cliente.estado = 'QUANTIDADE';
-    resposta = 'Digite a quantidade desejada.';
-  }
+const prato = cliente.opcoesPrato[escolha - 1];  
+const nome = prato.PRATO.toLowerCase();  
 
-  // ================== QUANTIDADE ==================
-  else if (cliente.estado === 'QUANTIDADE') {
-    const qtd = parseInt(texto);
+cliente.pedido.push({  
+  prato: prato.PRATO,  
+  valor: prato.VALOR,  
+  arroz: null,  
+  strogonoff: null,  
+  quantidade: 0  
+});  
 
-    if (isNaN(qtd) || qtd < 1) {
-      resposta = 'Digite uma quantidade válida.';
-    } else {
-      cliente.pedido[0].quantidade = qtd;
+cliente.precisaArroz = nome.includes('arroz');  
+cliente.precisaStrogonoff = nome.includes('strogonoff');  
 
-      cliente.estado = 'ADICIONAR_OUTRO';
-      resposta = `✅ Pedido anotado!\n\nDeseja adicionar mais pratos?\n1️⃣ Sim\n2️⃣ Não`;
-    }
-  }
+if (cliente.precisaArroz) {  
+  cliente.estado = 'VARIACAO_ARROZ';  
+  resposta = `🍚 Escolha o tipo de arroz:\n1️⃣ Branco\n2️⃣ Integral`;  
+} else if (cliente.precisaStrogonoff) {  
+  cliente.estado = 'VARIACAO_STROGONOFF';  
+  resposta = `🍛 Escolha o tipo de strogonoff:\n1️⃣ Tradicional\n2️⃣ Light`;  
+} else {  
+  cliente.estado = 'QUANTIDADE';  
+  resposta = `Digite a quantidade desejada.`;  
+}  
 
-  // ================== ADICIONAR OUTRO PRATO ==================
-  else if (cliente.estado === 'ADICIONAR_OUTRO') {
-    if (texto === '1') {
-      cliente.estado = 'ESCOLHENDO_PRATO';
-      const arquivo = path.join(__dirname, 'menu.xlsx');
-      const workbook = xlsx.readFile(arquivo);
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const dados = xlsx.utils.sheet_to_json(sheet);
+cliente.ultimaMensagem = resposta;  
+return res.json({ resposta });
 
-      cliente.opcoesPrato = dados;
+}
 
-      let lista = '🍽️ Escolha um prato:\n\n';
-      dados.forEach((item, index) => {
-        lista += `${index + 1}️⃣ ${item['PRATO']}\n`;
-      });
+// ================= VARIAÇÃO ARROZ =================
+if (cliente.estado === 'VARIACAO_ARROZ') {
+if (mensagem === '1') cliente.pedido.at(-1).arroz = 'Branco';
+else if (mensagem === '2') cliente.pedido.at(-1).arroz = 'Integral';
+else return res.json({ resposta: erroComUltimaMensagem(cliente) });
 
-      resposta = lista;
+if (cliente.precisastrogonoff) {  
+  cliente.estado = 'VARIACAO_STROGONOFF';  
+  resposta = `🍛 Escolha o tipo de strogonoff:\n1️⃣ Tradicional\n2️⃣ Light`;  
+} else {  
+  cliente.estado = 'QUANTIDADE';  
+  resposta = `Digite a quantidade desejada.`;  
+}  
 
-    } else if (texto === '2') {
-      cliente.estado = 'AGUARDANDO_ENDERECO';
-      resposta = 'Por favor, informe seu endereço de entrega.';
-    } else {
-      resposta = 'Escolha uma opção válida: 1️⃣ Sim ou 2️⃣ Não';
-    }
-  }
+cliente.ultimaMensagem = resposta;  
+return res.json({ resposta });
 
-  // ================== AGUARDANDO ENDEREÇO ==================
-  else if (cliente.estado === 'AGUARDANDO_ENDERECO') {
-    cliente.endereco = texto;
-    cliente.estado = 'AGUARDANDO_FRETE';
-    resposta = '✅ Recebido! Aguarde enquanto calculamos seu frete.';
-  }
+}
 
-  // ================== RESPONDER ==================
-  res.json({ resposta });
+// ================= VARIAÇÃO strogonoff =================
+if (cliente.estado === 'VARIACAO_STROGONOFF') {
+if (mensagem === '1') cliente.pedido.at(-1).strogonoff = 'Tradicional';
+else if (mensagem === '2') cliente.pedido.at(-1).strogonoff = 'Light';
+else return res.json({ resposta: erroComUltimaMensagem(cliente) });
+
+cliente.estado = 'QUANTIDADE';  
+resposta = `Digite a quantidade desejada.`;  
+cliente.ultimaMensagem = resposta;  
+return res.json({ resposta });
+
+}
+
+// ================= QUANTIDADE =================
+if (cliente.estado === 'QUANTIDADE') {
+const qtd = parseInt(mensagem);
+if (isNaN(qtd) || qtd < 1) {
+return res.json({ resposta: erroComUltimaMensagem(cliente) });
+}
+
+cliente.pedido.at(-1).quantidade = qtd;  
+cliente.estado = 'ADICIONAR_OUTRO';  
+resposta =  
+  `✅ Item adicionado!\n\nDeseja adicionar mais algum prato?\n\n` +  
+  `1️⃣ Sim\n` +  
+  `2️⃣ Não`;  
+cliente.ultimaMensagem = resposta;  
+return res.json({ resposta });
+
+}
+
+// ================= ADICIONAR OUTRO =================
+if (cliente.estado === 'ADICIONAR_OUTRO') {
+if (mensagem === '1') {
+cliente.estado = 'ESCOLHENDO_PRATO';
+const dados = carregarMenu();
+let lista = 🍽️ Escolha um prato:\n\n;
+dados.forEach((item, i) => {
+lista += ${i + 1}️⃣ ${item.PRATO}\n;
+});
+lista += \n0️⃣ Cancelar pedido;
+cliente.opcoesPrato = dados;
+cliente.ultimaMensagem = lista;
+return res.json({ resposta: lista });
+}
+
+if (mensagem === '2') {  
+  cliente.estado = 'AGUARDANDO_ENDERECO';  
+  resposta = `📍 Informe o endereço de entrega.`;  
+  cliente.ultimaMensagem = resposta;  
+  return res.json({ resposta });  
+}  
+
+return res.json({ resposta: erroComUltimaMensagem(cliente) });
+
+}
+
+// ================= ENDEREÇO =================
+if (cliente.estado === 'AGUARDANDO_ENDERECO') {
+cliente.endereco = texto;
+cliente.estado = 'AGUARDANDO_FRETE';
+resposta =
+✅ Endereço recebido.\n +
+Aguarde enquanto calculamos o frete.;
+cliente.ultimaMensagem = resposta;
+return res.json({ resposta });
+}
+
+// ================= FALLBACK =================
+estadoClientes.limparPedido(numero);
+resposta = saudacaoTexto() + menuPrincipal();
+return res.json({ resposta });
 });
 
-// ================== SERVER ==================
 app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+console.log(Servidor rodando na porta ${PORT});
 });
