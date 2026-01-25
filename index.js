@@ -229,7 +229,7 @@ if (mensagem === '1') cliente.pedido.at(-1).arroz = 'Branco';
 else if (mensagem === '2') cliente.pedido.at(-1).arroz = 'Integral';
 else return res.json({ resposta: erroComUltimaMensagem(cliente) });
 
-if (cliente.precisastrogonoff) {  
+if (cliente.precisaStrogonoff) {  
   cliente.estado = 'VARIACAO_STROGONOFF';  
   resposta = `🍛 Escolha o tipo de strogonoff:\n1️⃣ Tradicional\n2️⃣ Light`;  
 } else {  
