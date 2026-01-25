@@ -59,6 +59,8 @@ app.post('/webhook', (req, res) => {
 app.post('/mensagem', (req, res) => {
   const { numero, texto } = req.body;
 
+  const mensagem = texto.trim().toLowserCase();
+
   if (!numero || !texto) {
     return res.status(400).json({ erro: 'Informe numero e texto' });
   }
