@@ -318,6 +318,51 @@ else if (cliente.estado === 'CONFIRMAR_CANCELAMENTO') {
     resposta = '✅ Recebido! Aguarde enquanto calculamos seu frete.';
   }
 
+// ================== MENSAGEM INVÁLIDA ==================
+  else {
+    resposta =
+      '❌ Desculpe, não entendi o que você quis dizer.\n' +
+      'Por favor, selecione uma das opções abaixo.\n\n';
+
+    if (cliente.estado === 'MENU') {
+      resposta += mensagemMenu();
+    }
+
+    else if (cliente.estado === 'ESCOLHENDO_PRATO') {
+      resposta += '🍽️ Escolha um prato:\n\n';
+      cliente.opcoesPrato.forEach((item, index) => {
+        resposta += `${index + 1}️⃣ ${item['PRATO']}\n`;
+      });
+    }
+
+    else if (cliente.estado === 'VARIACAO_ARROZ') {
+      resposta += '🍚 Escolha o tipo de arroz:\n1️⃣ Branco\n2️⃣ Integral';
+    }
+
+    else if (cliente.estado === 'VARIACAO_STROGONOFF') {
+      resposta += '🍛 Escolha a variação do strogonoff:\n1️⃣ Tradicional\n2️⃣ Light';
+    }
+
+    else if (cliente.estado === 'QUANTIDADE') {
+      resposta += 'Digite a quantidade desejada.';
+    }
+
+    else if (cliente.estado === 'ADICIONAR_OUTRO') {
+      resposta += 'Deseja adicionar mais pratos?\n1️⃣ Sim\n2️⃣ Não';
+    }
+
+    else if (cliente.estado === 'CONFIRMAR_CANCELAMENTO') {
+      resposta +=
+        '⚠️ Tem certeza que deseja cancelar seu pedido?\n\n' +
+        '1️⃣ Sim, cancelar pedido\n' +
+        '2️⃣ Não, continuar pedido';
+    }
+
+    else {
+      resposta += mensagemMenu();
+    }
+  }
+  
   // ================== RESPONDER ==================
   res.json({ resposta });
 });
