@@ -318,12 +318,38 @@ if (cliente.estado === 'CARDAPIO') {
       return res.json({ resposta: lista });
     }
 
-    if (mensagem === '2') {
-      cliente.estado = 'AGUARDANDO_ENDERECO';
-      resposta = `📍 Informe o endereço de entrega.`;
-      cliente.ultimaMensagem = resposta;
-      return res.json({ resposta });
-    }
+   if (mensagem === '2') {
+
+  const totalMarmitas = cliente.pedido.reduce(
+    (soma, item) => soma + item.quantidade,
+    0
+  );
+
+  let valorUnitario = 19.99;
+  let textoPromocao = '';
+
+  if (totalMarmitas >= 5) {
+    valorUnitario = 17.49;
+
+    textoPromocao =
+      `🎉 *Parabéns! Promoção aplicada!*\n\n` +
+      `🔥 A partir de *5 marmitas*, o valor unitário cai de\n` +
+      `~~R$ 19,99~~ *R$ 17,49 por unidade*\n\n`;
+  }
+
+  const subtotal = (totalMarmitas * valorUnitario).toFixed(2);
+
+  cliente.estado = 'AGUARDANDO_ENDERECO';
+
+  resposta =
+    textoPromocao +
+    `🍱 Total de marmitas: *${totalMarmitas}*\n` +
+    `💰 Subtotal: *R$ ${subtotal}*\n\n` +
+    `📍 Informe o endereço de entrega para calcular o frete.`;
+
+  cliente.ultimaMensagem = resposta;
+  return res.json({ resposta });
+}
 
     return res.json({ resposta: erroComUltimaMensagem(cliente) });
   }
