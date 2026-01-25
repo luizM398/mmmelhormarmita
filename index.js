@@ -41,11 +41,7 @@ function encerrouPorInatividade(cliente) {
 }
 
 function erroComUltimaMensagem(cliente) {
-  return (
-    `❌ Não entendi sua resposta.\n` +
-    `Por favor, escolha uma das opções abaixo 👇\n\n` +
-    cliente.ultimaMensagem
-  );
+  return `❌ Não entendi sua resposta.\nPor favor, escolha uma das opções abaixo:\n\n${cliente.ultimaMensagem}`;
 }
 
 // ================= ROTAS =================
@@ -78,17 +74,19 @@ app.post('/mensagem', (req, res) => {
     return res.json({ resposta });
   }
 
-  // ===== PRIMEIRO CONTATO =====
-  if (!cliente.recebeuSaudacao) {
+  // ===== PRIMEIRO CONTATO / FINALIZADO =====
+  if (!cliente.recebeuSaudacao || cliente.estado === 'FINALIZADO') {
     cliente.recebeuSaudacao = true;
     cliente.estado = 'MENU';
+    cliente.menuBloqueado = false;
+
     resposta = saudacaoTexto() + menuPrincipal();
     cliente.ultimaMensagem = resposta;
     return res.json({ resposta });
   }
 
-  // ===== CANCELAR =====
-  if (mensagem === 'cancelar') {
+  // ===== CANCELAMENTO GLOBAL =====
+  if (mensagem === 'cancelar' && cliente.estado !== 'CONFIRMAR_CANCELAMENTO') {
     cliente.estado = 'CONFIRMAR_CANCELAMENTO';
     resposta =
       `⚠️ Tem certeza que deseja cancelar o pedido?\n\n` +
@@ -128,7 +126,7 @@ app.post('/mensagem', (req, res) => {
       });
 
       cardapio +=
-        `\n🔥 *Promoção*\n` +
+        `\n🔥 Promoção:\n` +
         `A partir de *5 marmitas*, o valor cai para *R$ 17,49* por unidade.\n\n` +
         `1️⃣ Fazer pedido\n` +
         `2️⃣ Voltar ao menu`;
@@ -150,6 +148,7 @@ app.post('/mensagem', (req, res) => {
 
       cliente.estado = 'ESCOLHENDO_PRATO';
       cliente.opcoesPrato = dados;
+      cliente.menuBloqueado = false;
       cliente.ultimaMensagem = lista;
       return res.json({ resposta: lista });
     }
@@ -182,7 +181,7 @@ app.post('/mensagem', (req, res) => {
 
   // ================= ESCOLHENDO PRATO =================
   if (cliente.estado === 'ESCOLHENDO_PRATO') {
-    if (mensagem === '0') {
+    if (mensagem === '0' && !cliente.menuBloqueado) {
       cliente.estado = 'MENU';
       return res.json({ resposta: menuPrincipal() });
     }
@@ -203,6 +202,7 @@ app.post('/mensagem', (req, res) => {
       quantidade: 0
     });
 
+    cliente.menuBloqueado = true;
     cliente.precisaArroz = nome.includes('arroz');
     cliente.precisaStrogonofe = nome.includes('strogonofe');
 
@@ -239,7 +239,7 @@ app.post('/mensagem', (req, res) => {
     return res.json({ resposta });
   }
 
-  // ================= VARIAÇÃO STROGONOFF =================
+  // ================= VARIAÇÃO STROGONOFE =================
   if (cliente.estado === 'VARIACAO_STROGONOFE') {
     if (mensagem === '1') cliente.pedido.at(-1).strogonofe = 'Tradicional';
     else if (mensagem === '2') cliente.pedido.at(-1).strogonofe = 'Light';
@@ -310,6 +310,7 @@ app.post('/mensagem', (req, res) => {
   return res.json({ resposta });
 });
 
+// ================= SERVER =================
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
