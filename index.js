@@ -10,8 +10,6 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 
 // ================== CONFIGURAÇÕES ==================
-const TEMPO_INATIVO = 10 * 60 * 1000; // 10 minutos em milissegundos
-// Para testes rápidos, você pode colocar 30 * 1000 (30 segundos)
 
 // ================== SAUDAÇÃO ==================
 function enviarSaudacao(cliente) {
@@ -25,13 +23,6 @@ function enviarSaudacao(cliente) {
     `2️⃣ Fazer um pedido\n` +
     `3️⃣ Sugestões`
   );
-}
-
-// ================== FUNÇÃO PARA VERIFICAR INATIVIDADE ==================
-function verificaInatividade(cliente) {
-  if (!cliente.ultimoContato) return false;
-  const agora = Date.now();
-  return agora - cliente.ultimoContato > TEMPO_INATIVO;
 }
 
 // ================== ROTAS BÁSICAS ==================
@@ -80,16 +71,6 @@ app.post('/mensagem', (req, res) => {
       '❌ Seu pedido foi cancelado com sucesso.\n\n' +
       enviarSaudacao(cliente);
 
-    return res.json({ resposta });
-  }
-
-  // ================== VERIFICA INATIVIDADE ==================
-  if (verificaInatividade(cliente)) {
-    cliente.estado = 'MENU';
-    cliente.recebeuSaudacao = false;
-    resposta =
-      "⚠️ Seu atendimento foi encerrado por inatividade. Vamos reiniciar o atendimento.\n\n" +
-      enviarSaudacao(cliente);
     return res.json({ resposta });
   }
 
