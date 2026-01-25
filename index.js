@@ -169,17 +169,34 @@ app.post('/mensagem', (req, res) => {
     return res.json({ resposta: erroComUltimaMensagem(cliente) });
   }
 
-  // ================= CARDÁPIO =================
-  if (cliente.estado === 'CARDAPIO') {
-    if (mensagem === '1' || mensagem === '2') {
-      cliente.estado = 'MENU';
-      resposta = menuPrincipal();
-      cliente.ultimaMensagem = resposta;
-      return res.json({ resposta });
-    }
+ // ================= CARDÁPIO =================
+if (cliente.estado === 'CARDAPIO') {
 
-    return res.json({ resposta: erroComUltimaMensagem(cliente) });
+  // 1️⃣ Voltar ao menu
+  if (mensagem === '1') {
+    cliente.estado = 'MENU';
+    return res.json({ resposta: menuPrincipal() });
   }
+
+  // 2️⃣ Fazer pedido
+  if (mensagem === '2') {
+    const dados = carregarMenu();
+    let lista = `🍽️ Escolha um prato:\n\n`;
+
+    dados.forEach((item, i) => {
+      lista += `${i + 1}️⃣ ${item.PRATO}\n`;
+    });
+
+    lista += `\n0️⃣ Voltar ao menu`;
+
+    cliente.estado = 'ESCOLHENDO_PRATO';
+    cliente.opcoesPrato = dados;
+    cliente.ultimaMensagem = lista;
+    return res.json({ resposta: lista });
+  }
+
+  return res.json({ resposta: erroComUltimaMensagem(cliente) });
+}
 
   // ================= ESCOLHENDO PRATO =================
   if (cliente.estado === 'ESCOLHENDO_PRATO') {
