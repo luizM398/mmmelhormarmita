@@ -139,6 +139,42 @@ if (!cliente.recebeuSaudacao || cliente.estado === 'FINALIZADO') {
     }
   }
 
+// ================== CONFIRMAR CANCELAMENTO ==================
+    
+else if (cliente.estado === 'CONFIRMAR_CANCELAMENTO') {
+  if (mensagem === '1') {
+    // CONFIRMOU CANCELAMENTO
+    estadoClientes.limparPedido(numero);
+
+    cliente.estado = 'MENU';
+    cliente.recebeuSaudacao = true;
+
+    resposta =
+      '❌ Pedido cancelado com sucesso.\n\n' +
+      mensagemMenu();
+
+    return res.json({ resposta });
+  }
+
+  if (mensagem === '2') {
+    // DESISTIU DO CANCELAMENTO
+    cliente.estado = cliente.estadoAnterior || 'MENU';
+
+    resposta =
+      '✅ Pedido mantido. Vamos continuar de onde paramos.';
+
+    return res.json({ resposta });
+  }
+
+  // Qualquer outra coisa
+  resposta =
+    '❌ Opção inválida.\n\n' +
+    '1️⃣ Sim, cancelar pedido\n' +
+    '2️⃣ Não, continuar pedido';
+
+  return res.json({ resposta });
+}
+    
   // ================== ESCOLHA DO PRATO ==================
   else if (cliente.estado === 'ESCOLHENDO_PRATO') {
     const escolha = parseInt(texto);
