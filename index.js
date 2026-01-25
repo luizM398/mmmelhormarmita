@@ -98,26 +98,30 @@ app.post('/mensagem', (req, res) => {
     return res.json({ resposta });
   }
 
-  if (cliente.estado === 'CONFIRMAR_CANCELAMENTO') {
-    if (mensagem === '1') {
-      estadoClientes.limparPedido(numero);
-      resposta =
-        `❌ Pedido cancelado com sucesso.\n\n` +
-        saudacaoTexto() +
-        menuPrincipal();
-      cliente.ultimaMensagem = resposta;
-      return res.json({ resposta });
-    }
+ if (cliente.estado === 'CONFIRMAR_CANCELAMENTO') {
 
-    if (mensagem === '2') {
-      cliente.estado = 'MENU';
-      resposta = menuPrincipal();
-      cliente.ultimaMensagem = resposta;
-      return res.json({ resposta });
-    }
+  // 1️⃣ CONFIRMOU CANCELAMENTO
+  if (mensagem === '1') {
+    estadoClientes.limparPedido(numero);
 
-    return res.json({ resposta: erroComUltimaMensagem(cliente) });
+    cliente.estado = 'MENU';
+
+    resposta =
+      `❌ Pedido cancelado com sucesso.\n\n` +
+      menuPrincipal();
+
+    cliente.ultimaMensagem = resposta;
+    return res.json({ resposta });
   }
+
+  // 2️⃣ NÃO QUIS CANCELAR → CONTINUA DE ONDE PAROU
+  if (mensagem === '2') {
+    resposta = cliente.ultimaMensagem;
+    return res.json({ resposta });
+  }
+
+  return res.json({ resposta: erroComUltimaMensagem(cliente) });
+}
 
   // ================= MENU =================
   if (cliente.estado === 'MENU') {
