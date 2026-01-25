@@ -12,16 +12,21 @@ app.use(express.json());
 // ================== CONFIGURAÇÕES ==================
 
 // ================== SAUDAÇÃO ==================
-function enviarSaudacao(cliente) {
-  cliente.estado = 'MENU';
+
+function mensagemSaudacao() {
   return (
     `👋 Olá! Bem-vindo(a) à Melhor Marmita!\n` +
-    `Aqui você encontra comidas de qualidade, saborosas e fresquinhas. 😋\n` +
-    `✨ Qualidade e sabor garantidos!\n\n` +
-    `O que você deseja hoje?\n` +
+    `Aqui você encontra comida de qualidade, saborosa e fresquinha. 😋\n` +
+    `✨ Qualidade e sabor garantidos!`
+  );
+}
+
+function mensagemMenu() {
+  return (
+    `\nO que você deseja hoje?\n\n` +
     `1️⃣ Ver o cardápio\n` +
     `2️⃣ Fazer um pedido\n` +
-    `3️⃣ Sugestões`
+    `3️⃣ Elogios e reclamações`
   );
 }
 
@@ -75,12 +80,17 @@ app.post('/mensagem', (req, res) => {
   }
 
   // ================== SAUDAÇÃO ==================
-  if (!cliente.recebeuSaudacao || cliente.estado === 'FINALIZADO') {
-    cliente.recebeuSaudacao = true;
-    cliente.estado = 'MENU';
-    resposta = enviarSaudacao(cliente);
-    return res.json({ resposta });
-  }
+ 
+if (!cliente.recebeuSaudacao || cliente.estado === 'FINALIZADO') {
+  cliente.recebeuSaudacao = true;
+  cliente.estado = 'MENU';
+
+  resposta =
+    mensagemSaudacao() +
+    mensagemMenu();
+
+  return res.json({ resposta });
+}
 
   // ================== MENU ==================
   if (cliente.estado === 'MENU') {
