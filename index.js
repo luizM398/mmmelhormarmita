@@ -20,12 +20,12 @@ function saudacaoTexto() {
 }
 
 function menuPrincipal() {
-return (
-\n\nO que você deseja hoje?\n\n +
-1️⃣ Ver cardápio\n +
-2️⃣ Fazer pedido\n +
-3️⃣ Elogios e Reclamações
-);
+  return (
+    `\n\nO que você deseja hoje?\n\n` +
+    `1️⃣ Ver cardápio\n` +
+    `2️⃣ Fazer pedido\n` +
+    `3️⃣ Elogios e Reclamações`
+  );
 }
 
 function carregarMenu() {
@@ -71,9 +71,9 @@ cliente.ultimoContato = Date.now();
 if (encerrouPorInatividade(cliente)) {
 estadoClientes.limparPedido(numero);
 resposta =
-⏰ Seu atendimento foi encerrado por inatividade.\n\n +
-saudacaoTexto() +
-menuPrincipal();
+  `⏰ Seu atendimento foi encerrado por inatividade.\n\n` +
+  saudacaoTexto() +
+  menuPrincipal();
 cliente.ultimaMensagem = resposta;
 return res.json({ resposta });
 }
@@ -121,7 +121,7 @@ return res.json({ resposta: erroComUltimaMensagem(cliente) });
 if (cliente.estado === 'MENU') {
 if (mensagem === '1') {
 const dados = carregarMenu();
-let cardapio = 🍱 *Cardápio*\n\n;
+let cardapio = `🍱 *Cardápio*\n\n`;
 
 dados.forEach(item => {  
     cardapio += `• ${item.PRATO} — R$ ${item.VALOR}\n`;  
@@ -317,5 +317,4 @@ return res.json({ resposta });
 });
 
 app.listen(PORT, () => {
-console.log(Servidor rodando na porta ${PORT});
-});
+console.log(`Servidor rodando na porta ${PORT}`);
