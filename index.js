@@ -13,10 +13,10 @@ const TEMPO_INATIVO = 10 * 60 * 1000;
 // ================= FUNÇÕES AUXILIARES =================
 
 function saudacaoTexto() {
-return (
-👋 Olá! Seja muito bem-vindo(a) à *Melhor Marmita* 🍱\n +
-Comida caseira, saborosa e feita com carinho para o seu dia a dia 😋
-);
+  return (
+    `👋 Olá! Seja muito bem-vindo(a) à *Melhor Marmita* 🍱\n` +
+    `Comida caseira, saborosa e feita com carinho para o seu dia a dia 😋`
+  );
 }
 
 function menuPrincipal() {
@@ -129,7 +129,7 @@ dados.forEach(item => {
 
   cardapio +=  
     `\n🔥 *Promoção*\n` +  
-    `A partir de *5 marmitas*, o valor cai para *R$ 17,49* por unidade.\n\n` +  
+    `A partir de *5 marmitas*, o valor de ~~R$ 19,99~~ cai para *R$ 17,49* por unidade.\n\n` +  
     `1️⃣ Fazer pedido\n` +  
     `2️⃣ Voltar ao menu`;  
 
