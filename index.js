@@ -157,14 +157,46 @@ else if (cliente.estado === 'CONFIRMAR_CANCELAMENTO') {
   }
 
   if (mensagem === '2') {
-    // DESISTIU DO CANCELAMENTO
-    cliente.estado = cliente.estadoAnterior || 'MENU';
+  // DESISTIU DO CANCELAMENTO
+  cliente.estado = cliente.estadoAnterior || 'MENU';
 
-    resposta =
-      '✅ Pedido mantido. Vamos continuar de onde paramos.';
+  resposta = '✅ Pedido mantido.\n\n';
 
-    return res.json({ resposta });
+  // Reenvia a mensagem correta conforme o estado anterior
+  switch (cliente.estado) {
+    case 'MENU':
+      resposta += mensagemMenu();
+      break;
+
+    case 'ESCOLHENDO_PRATO':
+      resposta += '🍽️ Escolha um prato:\n\n';
+      cliente.opcoesPrato.forEach((item, index) => {
+        resposta += `${index + 1}️⃣ ${item['PRATO']}\n`;
+      });
+      break;
+
+    case 'VARIACAO_ARROZ':
+      resposta += '🍚 Escolha o tipo de arroz:\n1️⃣ Branco\n2️⃣ Integral';
+      break;
+
+    case 'VARIACAO_STROGONOFF':
+      resposta += '🍛 Escolha a variação do strogonoff:\n1️⃣ Tradicional\n2️⃣ Light';
+      break;
+
+    case 'QUANTIDADE':
+      resposta += 'Digite a quantidade desejada.';
+      break;
+
+    case 'ADICIONAR_OUTRO':
+      resposta += 'Deseja adicionar mais pratos?\n1️⃣ Sim\n2️⃣ Não';
+      break;
+
+    default:
+      resposta += mensagemMenu();
   }
+
+  return res.json({ resposta });
+}
 
   // Qualquer outra coisa
   resposta =
