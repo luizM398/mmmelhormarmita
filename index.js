@@ -69,15 +69,15 @@ app.post('/mensagem', (req, res) => {
 
   // ================== CANCELAMENTO GLOBAL ==================
   
+// ================== CANCELAMENTO (PEDIR CONFIRMAÇÃO) ==================
 if (mensagem === 'cancelar') {
-  estadoClientes.limparPedido(numero);
-
-  cliente.estado = 'MENU';
-  cliente.recebeuSaudacao = true; // mantém como já saudado
+  cliente.estadoAnterior = cliente.estado; // guarda onde estava
+  cliente.estado = 'CONFIRMAR_CANCELAMENTO';
 
   resposta =
-    '❌ Seu pedido foi cancelado com sucesso.\n\n' +
-    mensagemMenu(); // ⚠️ SOMENTE menu
+    '⚠️ Tem certeza que deseja cancelar seu pedido?\n\n' +
+    '1️⃣ Sim, cancelar pedido\n' +
+    '2️⃣ Não, continuar pedido';
 
   return res.json({ resposta });
 }
