@@ -129,7 +129,7 @@ app.post('/mensagem', (req, res) => {
 
       cardapio +=
         `\n🔥 *Promoção*\n` +
-        `A partir de *5 marmitas*, o valor de ~~R$ 19,99~~ cai para *R$ 17,49* por unidade.\n\n` +
+        `A partir de *5 marmitas*, o valor cai para *R$ 17,49* por unidade.\n\n` +
         `1️⃣ Fazer pedido\n` +
         `2️⃣ Voltar ao menu`;
 
@@ -180,121 +180,129 @@ app.post('/mensagem', (req, res) => {
     return res.json({ resposta: erroComUltimaMensagem(cliente) });
   }
 
-  // ================== ESCOLHA DO PRATO ==================
-else if (cliente.estado === 'ESCOLHENDO_PRATO') {
-const escolha = parseInt(texto);
+  // ================= ESCOLHENDO PRATO =================
+  if (cliente.estado === 'ESCOLHENDO_PRATO') {
+    if (mensagem === '0') {
+      cliente.estado = 'MENU';
+      return res.json({ resposta: menuPrincipal() });
+    }
 
-if (isNaN(escolha) || escolha < 1 || escolha > cliente.opcoesPrato.length) {  
-  resposta = 'Escolha um número válido.';  
-} else {  
-  const prato = cliente.opcoesPrato[escolha - 1];  
-  const nome = prato['PRATO'].toLowerCase();  
+    const escolha = parseInt(mensagem);
+    if (isNaN(escolha) || escolha < 1 || escolha > cliente.opcoesPrato.length) {
+      return res.json({ resposta: erroComUltimaMensagem(cliente) });
+    }
 
-  cliente.pedido = [{  
-    prato: prato['PRATO'],  
-    valor: prato['VALOR'],  
-    arroz: null,  
-    strogonoff: null,  
-    quantidade: 0  
-  }];  
+    const prato = cliente.opcoesPrato[escolha - 1];
+    const nome = prato.PRATO.toLowerCase();
 
-  cliente.precisaArroz = nome.includes('arroz');  
-  cliente.precisaStrogonoff = nome.includes('strogon');  
+    cliente.pedido.push({
+      prato: prato.PRATO,
+      valor: prato.VALOR,
+      arroz: null,
+      strogonoff: null,
+      quantidade: 0
+    });
 
-  if (cliente.precisaArroz) {  
-    cliente.estado = 'VARIACAO_ARROZ';  
-    resposta =  
-      `🍚 ${prato['PRATO']}\n\nEscolha o tipo de arroz:\n1️⃣ Branco\n2️⃣ Integral`;  
-  }   
-  else if (cliente.precisaStrogonoff) {  
-    cliente.estado = 'VARIACAO_STROGONOFF';  
-    resposta =  
-      `🍛 ${prato['PRATO']}\n\nEscolha a variação do strogonoff:\n1️⃣ Tradicional\n2️⃣ Light`;  
-  }   
-  else {  
-    cliente.estado = 'QUANTIDADE';  
-    resposta = 'Digite a quantidade desejada.';  
-  }  
-}
+    cliente.precisaArroz = nome.includes('arroz');
+    cliente.precisaStrogonoff = nome.includes('strogonoff');
 
-}
+    if (cliente.precisaArroz) {
+      cliente.estado = 'VARIACAO_ARROZ';
+      resposta = `🍚 Escolha o tipo de arroz:\n1️⃣ Branco\n2️⃣ Integral`;
+    } else if (cliente.precisaStrogonoff) {
+      cliente.estado = 'VARIACAO_STROGONOFF';
+      resposta = `🍛 Escolha o tipo de strogonoff:\n1️⃣ Tradicional\n2️⃣ Light`;
+    } else {
+      cliente.estado = 'QUANTIDADE';
+      resposta = `Digite a quantidade desejada.`;
+    }
 
-// ================== VARIAÇÃO ARROZ ==================
-else if (cliente.estado === 'VARIACAO_ARROZ') {
-if (texto === '1') cliente.pedido[0].arroz = 'Branco';
-else if (texto === '2') cliente.pedido[0].arroz = 'Integral';
-else return res.json({ resposta: 'Escolha 1 ou 2.' });
+    cliente.ultimaMensagem = resposta;
+    return res.json({ resposta });
+  }
 
-if (cliente.precisaStrogonoff) {  
-  cliente.estado = 'VARIACAO_STROGONOFF';  
-  resposta =  
-    `🍛 Escolha a variação do strogonoff:\n1️⃣ Tradicional\n2️⃣ Light`;  
-} else {  
-  cliente.estado = 'QUANTIDADE';  
-  resposta = 'Digite a quantidade desejada.';  
-}
+  // ================= VARIAÇÃO ARROZ =================
+  if (cliente.estado === 'VARIACAO_ARROZ') {
+    if (mensagem === '1') cliente.pedido.at(-1).arroz = 'Branco';
+    else if (mensagem === '2') cliente.pedido.at(-1).arroz = 'Integral';
+    else return res.json({ resposta: erroComUltimaMensagem(cliente) });
 
-}
+    if (cliente.precisaStrogonoff) {
+      cliente.estado = 'VARIACAO_STROGONOFF';
+      resposta = `🍛 Escolha o tipo de strogonoff:\n1️⃣ Tradicional\n2️⃣ Light`;
+    } else {
+      cliente.estado = 'QUANTIDADE';
+      resposta = `Digite a quantidade desejada.`;
+    }
 
-// ================== VARIAÇÃO STROGONOFF ==================
-else if (cliente.estado === 'VARIACAO_STROGONOFF') {
-if (texto === '1') cliente.pedido[0].strogonoff = 'Tradicional';
-else if (texto === '2') cliente.pedido[0].strogonoff = 'Light';
-else return res.json({ resposta: 'Escolha 1 ou 2.' });
+    cliente.ultimaMensagem = resposta;
+    return res.json({ resposta });
+  }
 
-cliente.estado = 'QUANTIDADE';  
-resposta = 'Digite a quantidade desejada.';
+  // ================= VARIAÇÃO strogonoff =================
+  if (cliente.estado === 'VARIACAO_STROGONOFF') {
+    if (mensagem === '1') cliente.pedido.at(-1).strogonoff = 'Tradicional';
+    else if (mensagem === '2') cliente.pedido.at(-1).strogonoff = 'Light';
+    else return res.json({ resposta: erroComUltimaMensagem(cliente) });
 
-}
+    cliente.estado = 'QUANTIDADE';
+    resposta = `Digite a quantidade desejada.`;
+    cliente.ultimaMensagem = resposta;
+    return res.json({ resposta });
+  }
 
-// ================== QUANTIDADE ==================
-else if (cliente.estado === 'QUANTIDADE') {
-const qtd = parseInt(texto);
+  // ================= QUANTIDADE =================
+  if (cliente.estado === 'QUANTIDADE') {
+    const qtd = parseInt(mensagem);
+    if (isNaN(qtd) || qtd < 1) {
+      return res.json({ resposta: erroComUltimaMensagem(cliente) });
+    }
 
-if (isNaN(qtd) || qtd < 1) {  
-  resposta = 'Digite uma quantidade válida.';  
-} else {  
-  cliente.pedido[0].quantidade = qtd;  
+    cliente.pedido.at(-1).quantidade = qtd;
+    cliente.estado = 'ADICIONAR_OUTRO';
+    resposta =
+      `✅ Item adicionado!\n\nDeseja adicionar mais algum prato?\n\n` +
+      `1️⃣ Sim\n` +
+      `2️⃣ Não`;
+    cliente.ultimaMensagem = resposta;
+    return res.json({ resposta });
+  }
 
-  cliente.estado = 'ADICIONAR_OUTRO';  
-  resposta = `✅ Pedido anotado!\n\nDeseja adicionar mais pratos?\n1️⃣ Sim\n2️⃣ Não`;  
-}
+  // ================= ADICIONAR OUTRO =================
+  if (cliente.estado === 'ADICIONAR_OUTRO') {
+    if (mensagem === '1') {
+      cliente.estado = 'ESCOLHENDO_PRATO';
+      const dados = carregarMenu();
+      let lista = `🍽️ Escolha um prato:\n\n`;
+      dados.forEach((item, i) => {
+        lista += `${i + 1}️⃣ ${item.PRATO}\n`;
+      });
+      lista += `\n0️⃣ Cancelar pedido`;
+      cliente.opcoesPrato = dados;
+      cliente.ultimaMensagem = lista;
+      return res.json({ resposta: lista });
+    }
 
-}
+    if (mensagem === '2') {
+      cliente.estado = 'AGUARDANDO_ENDERECO';
+      resposta = `📍 Informe o endereço de entrega.`;
+      cliente.ultimaMensagem = resposta;
+      return res.json({ resposta });
+    }
 
-// ================== ADICIONAR OUTRO PRATO ==================
-else if (cliente.estado === 'ADICIONAR_OUTRO') {
-if (texto === '1') {
-cliente.estado = 'ESCOLHENDO_PRATO';
-const arquivo = path.join(__dirname, 'menu.xlsx');
-const workbook = xlsx.readFile(arquivo);
-const sheet = workbook.Sheets[workbook.SheetNames[0]];
-const dados = xlsx.utils.sheet_to_json(sheet);
+    return res.json({ resposta: erroComUltimaMensagem(cliente) });
+  }
 
-cliente.opcoesPrato = dados;  
-
-  let lista = '🍽️ Escolha um prato:\n\n';  
-  dados.forEach((item, index) => {  
-    lista += `${index + 1}️⃣ ${item['PRATO']}\n`;  
-  });  
-
-  resposta = lista;  
-
-} else if (texto === '2') {  
-  cliente.estado = 'AGUARDANDO_ENDERECO';  
-  resposta = 'Por favor, informe seu endereço de entrega.';  
-} else {  
-  resposta = 'Escolha uma opção válida: 1️⃣ Sim ou 2️⃣ Não';  
-}
-
-}
-
-// ================== AGUARDANDO ENDEREÇO ==================
-else if (cliente.estado === 'AGUARDANDO_ENDERECO') {
-cliente.endereco = texto;
-cliente.estado = 'AGUARDANDO_FRETE';
-resposta = '✅ Recebido! Aguarde enquanto calculamos seu frete.';
-}
+  // ================= ENDEREÇO =================
+  if (cliente.estado === 'AGUARDANDO_ENDERECO') {
+    cliente.endereco = texto;
+    cliente.estado = 'AGUARDANDO_FRETE';
+    resposta =
+      `✅ Endereço recebido.\n` +
+      `Aguarde enquanto calculamos o frete.`;
+    cliente.ultimaMensagem = resposta;
+    return res.json({ resposta });
+  }
 
   // ================= FALLBACK =================
   estadoClientes.limparPedido(numero);
