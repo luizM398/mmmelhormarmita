@@ -55,15 +55,26 @@ app.get('/', (req, res) => {
 });
 
 app.post('/mensagem', (req, res) => {
- const numero = req.body?.data?.from;
-const texto = req.body?.data?.body;
 
-// ignora eventos que não são mensagens de texto
-if (typeof texto !== 'string' || !numero) {
-  return res.status(200).json({ ok: true });
-}
+  // 🔹 LEITURA COMPATÍVEL COM WA SENDER
+  const numero =
+    req.body?.data?.from ||
+    req.body?.data?.sender ||
+    req.body?.data?.chatId ||
+    req.body?.data?.key?.remoteJid;
 
-const mensagem = texto.trim().toLowerCase();
+  const texto =
+    req.body?.data?.body ||
+    req.body?.data?.message?.text ||
+    req.body?.data?.text ||
+    req.body?.data?.message;
+
+  // 🔹 Se não vier mensagem de texto, ignora
+  if (!numero || !texto) {
+    return res.status(200).json({ ok: true });
+  }
+
+  const mensagem = String(texto).trim().toLowerCase();
 
   const cliente = estadoClientes.getEstado(numero);
   let resposta = '';
