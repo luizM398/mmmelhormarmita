@@ -6,22 +6,7 @@ const estadoClientes = require('./estadoClientes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
-app.use((req, res, next) => {
-  let data = '';
-  req.on('data', chunk => {
-    data += chunk;
-  });
-  req.on('end', () => {
-    if (!req.body || Object.keys(req.body).length === 0) {
-      try {
-        req.body = JSON.parse(data);
-      } catch (e) {}
-    }
-    next();
-  });
-});
+app.use(express.json());
 
 const TEMPO_INATIVO = 10 * 60 * 1000;
 
