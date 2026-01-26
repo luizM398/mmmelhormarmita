@@ -104,8 +104,6 @@ if (!numero || !texto) {
   return res.status(200).json({ ok: true });
 }
 
-const mensagem = texto.trim().toLowerCase();
-
 const mensagem = String(texto).trim().toLowerCase();
 
   const cliente = estadoClientes.getEstado(numero);
