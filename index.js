@@ -73,16 +73,16 @@ if (!msg) {
 }
 
 const numero =
-  msg?.key?.remoteJid ||
-  msg?.senderPn ||
-  msg?.cleanedSenderPn;
+  req.body?.data?.messages?.key?.remoteJid ||
+  req.body?.data?.messages?.senderPn ||
+  req.body?.data?.messages?.cleanedSenderPn;
 
 const texto =
-  msg?.messageBody ||
-  msg?.message?.conversation ||
-  msg?.message?.extendedTextMessage?.text;
+  req.body?.data?.messages?.messageBody ||
+  req.body?.data?.messages?.message?.conversation;
 
 if (!numero || !texto) {
+  console.log('Webhook recebido sem texto ou número');
   return res.status(200).json({ ok: true });
 }
 
