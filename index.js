@@ -97,11 +97,8 @@ if (!msg) {
   return res.status(200).json({ ok: true });
 }
 
-const numero =
-  msg?.key?.remoteJid ||
-  msg?.senderPn ||
-  msg?.cleanedSenderPn;
-
+const numero = msg?.cleanedSenderPn || msg?.senderPn;
+  
 const texto =
   msg?.messageBody ||
   msg?.message?.conversation;
