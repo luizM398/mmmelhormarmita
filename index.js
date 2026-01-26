@@ -57,14 +57,30 @@ app.get('/', (req, res) => {
 app.post('/mensagem', (req, res) => {
 
   // 🔹 LEITURA CORRETA WA SENDER (mensagens reais)
-const numero = req.body?.data?.messages?.key?.remoteJid;
-const texto = req.body?.data?.messages?.messageBody;
+const msg =
+  Array.isArray(req.body?.data?.messages)
+    ? req.body.data.messages[0]
+    : req.body?.data?.messages;
+
+if (!msg) {
+  return res.status(200).json({ ok: true });
+}
+
+const numero =
+  msg?.key?.remoteJid ||
+  msg?.senderPn ||
+  msg?.cleanedSenderPn;
+
+const texto =
+  msg?.messageBody ||
+  msg?.message?.conversation ||
+  msg?.message?.extendedTextMessage?.text;
 
 if (!numero || !texto) {
   return res.status(200).json({ ok: true });
 }
 
-const mensagem = texto.trim().toLowerCase();
+const mensagem = String(texto).trim().toLowerCase();
 
   const cliente = estadoClientes.getEstado(numero);
   let resposta = '';
