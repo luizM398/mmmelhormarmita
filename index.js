@@ -73,13 +73,13 @@ if (!msg) {
 }
 
 const numero =
-  req.body?.data?.messages?.key?.remoteJid ||
-  req.body?.data?.messages?.senderPn ||
-  req.body?.data?.messages?.cleanedSenderPn;
+  msg?.key?.remoteJid ||
+  msg?.senderPn ||
+  msg?.cleanedSenderPn;
 
 const texto =
-  req.body?.data?.messages?.messageBody ||
-  req.body?.data?.messages?.message?.conversation;
+  msg?.messageBody ||
+  msg?.message?.conversation;
 
 if (!numero || !texto) {
   console.log('Webhook recebido sem texto ou número');
