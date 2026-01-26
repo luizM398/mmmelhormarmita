@@ -55,11 +55,15 @@ function erroComUltimaMensagem(cliente) {
 
 async function enviarMensagemWA(numero, texto) {
   try {
+    const numeroLimpo = numero
+      .replace('@lid', '')
+      .replace('@s.whatsapp.net', '');
+
     await axios.post(
       'https://www.wasenderapi.com/api/send-message',
       {
-        phone: numero,
-        message: texto
+        to: numeroLimpo,
+        text: texto
       },
       {
         headers: {
@@ -69,7 +73,10 @@ async function enviarMensagemWA(numero, texto) {
       }
     );
   } catch (err) {
-    console.error('Erro ao enviar mensagem:', err.response?.data || err.message);
+    console.error(
+      'Erro ao enviar mensagem:',
+      err.response?.data || err.message
+    );
   }
 }
 
