@@ -55,18 +55,15 @@ app.get('/', (req, res) => {
 });
 
 app.post('/mensagem', (req, res) => {
-  const numero = req.body?.data?.from;
+ const numero = req.body?.data?.from;
 const texto = req.body?.data?.body;
 
-if (!numero || !texto) {
+// ignora eventos que não são mensagens de texto
+if (typeof texto !== 'string' || !numero) {
   return res.status(200).json({ ok: true });
 }
 
 const mensagem = texto.trim().toLowerCase();
-
-  if (!numero || !texto) {
-    return res.status(400).json({ erro: 'Número e texto obrigatórios' });
-  }
 
   const cliente = estadoClientes.getEstado(numero);
   let resposta = '';
