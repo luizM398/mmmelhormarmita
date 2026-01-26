@@ -63,7 +63,7 @@ async function enviarMensagemWA(numeroLimpo, texto) {
       },
       {
         headers: {
-          Authorization: 'Bearer SEU_API_ACCESS_TOKEN_DA_SESSAO',
+          Authorization: 'Bearer 399f73920f6d3300e39fc9f8f0e34eb40510a8a14847e288580d5d10e40cdae4',
           'Content-Type': 'application/json'
         }
       }
