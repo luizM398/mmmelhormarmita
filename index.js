@@ -55,9 +55,7 @@ function erroComUltimaMensagem(cliente) {
 
 async function enviarMensagemWA(numero, texto) {
   try {
-    const numeroLimpo = numero
-      .replace('@lid', '')
-      .replace('@s.whatsapp.net', '');
+    const numeroLimpo = String(numero).replace(/\D/g, '');
 
     await axios.post(
       'https://www.wasenderapi.com/api/send-message',
