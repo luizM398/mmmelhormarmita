@@ -88,25 +88,23 @@ app.post('/mensagem', (req, res) => {
 console.log(JSON.stringify(req.body, null, 2));
 
   // 🔹 LEITURA CORRETA WA SENDER (mensagens reais)
-const msg =
-  Array.isArray(req.body?.data?.messages)
-    ? req.body.data.messages[0]
-    : req.body?.data?.messages;
+
+  const msg = req.body?.data?.messages;
 
 if (!msg) {
+  console.log('Webhook sem messages');
   return res.status(200).json({ ok: true });
 }
 
-const numero = msg?.cleanedSenderPn || msg?.senderPn;
-  
-const texto =
-  msg?.messageBody ||
-  msg?.message?.conversation;
+const numero = msg.cleanedSenderPn || msg.senderPn;
+const texto = msg.messageBody || msg.message?.conversation;
 
 if (!numero || !texto) {
-  console.log('Webhook recebido sem texto ou número');
+  console.log('Webhook recebido sem texto ou número', { numero, texto });
   return res.status(200).json({ ok: true });
 }
+
+const mensagem = texto.trim().toLowerCase();
 
 const mensagem = String(texto).trim().toLowerCase();
 
