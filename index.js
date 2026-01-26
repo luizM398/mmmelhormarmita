@@ -2,6 +2,7 @@ const express = require('express');
 const xlsx = require('xlsx');
 const path = require('path');
 const estadoClientes = require('./estadoClientes');
+const axios = require('axios');
 
 const app = express();
 app.use((req, res, next) => {
@@ -50,6 +51,26 @@ function erroComUltimaMensagem(cliente) {
     `Por favor, escolha uma das opções abaixo 👇\n\n` +
     cliente.ultimaMensagem
   );
+}
+
+async function enviarMensagemWA(numero, texto) {
+  try {
+    await axios.post(
+      'https://www.wasenderapi.com/api/send-message',
+      {
+        phone: numero,
+        message: texto
+      },
+      {
+        headers: {
+          Authorization: 'Bearer 399f73920f6d3300e39fc9f8f0e34eb40510a8a14847e288580d5d10e40cdae4',
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+  } catch (err) {
+    console.error('Erro ao enviar mensagem:', err.response?.data || err.message);
+  }
 }
 
 // ================= ROTAS =================
@@ -105,14 +126,18 @@ const mensagem = String(texto).trim().toLowerCase();
   }
 
   // ===== PRIMEIRO CONTATO =====
-  if (!cliente.recebeuSaudacao) {
-    cliente.recebeuSaudacao = true;
-    cliente.estado = 'MENU';
-    resposta = saudacaoTexto() + menuPrincipal();
-    cliente.ultimaMensagem = resposta;
-    return res.json({ resposta });
-  }
 
+if (!cliente.recebeuSaudacao) {
+  cliente.recebeuSaudacao = true;
+  cliente.estado = 'MENU';
+  resposta = saudacaoTexto() + menuPrincipal();
+  cliente.ultimaMensagem = resposta;
+
+  enviarMensagemWA(numero, resposta);
+
+  return res.status(200).json({ ok: true });
+}
+  
  // ===== CANCELAR =====
 if (mensagem === 'cancelar') {
   cliente.estadoAnterior = cliente.estado; // <<< GUARDA ONDE ESTAVA
