@@ -4,6 +4,10 @@ const path = require('path');
 const estadoClientes = require('./estadoClientes');
 
 const app = express();
+app.use((req, res, next) => {
+  console.log('REQ CHEGOU:', req.method, req.url);
+  next();
+});
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
@@ -55,6 +59,8 @@ app.get('/', (req, res) => {
 });
 
 app.post('/mensagem', (req, res) => {
+  console.log('ENTROU NA /mensagem');
+console.log(JSON.stringify(req.body, null, 2));
 
   // 🔹 LEITURA CORRETA WA SENDER (mensagens reais)
 const msg =
