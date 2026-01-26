@@ -56,25 +56,15 @@ app.get('/', (req, res) => {
 
 app.post('/mensagem', (req, res) => {
 
-  // 🔹 LEITURA COMPATÍVEL COM WA SENDER
-  const numero =
-    req.body?.data?.from ||
-    req.body?.data?.sender ||
-    req.body?.data?.chatId ||
-    req.body?.data?.key?.remoteJid;
+  // 🔹 LEITURA CORRETA WA SENDER (mensagens reais)
+const numero = req.body?.data?.messages?.key?.remoteJid;
+const texto = req.body?.data?.messages?.messageBody;
 
-  const texto =
-    req.body?.data?.body ||
-    req.body?.data?.message?.text ||
-    req.body?.data?.text ||
-    req.body?.data?.message;
+if (!numero || !texto) {
+  return res.status(200).json({ ok: true });
+}
 
-  // 🔹 Se não vier mensagem de texto, ignora
-  if (!numero || !texto) {
-    return res.status(200).json({ ok: true });
-  }
-
-  const mensagem = String(texto).trim().toLowerCase();
+const mensagem = texto.trim().toLowerCase();
 
   const cliente = estadoClientes.getEstado(numero);
   let resposta = '';
