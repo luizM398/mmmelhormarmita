@@ -87,6 +87,14 @@ app.post('/mensagem', async (req, res) => {
   console.log('ENTROU NA /mensagem');
 console.log(JSON.stringify(req.body, null, 2));
 
+  // ✅ LEITURA CORRETA DO PAYLOAD WASENDER
+const mensagemObj = req.body?.dados?.mensagens;
+
+if (!mensagemObj) {
+  console.log('Webhook sem mensagens estruturadas');
+  return res.status(200).json({ ok: true });
+}
+
 // 🔹 Captura e limpa o NÚMERO (Pega o que vem antes do @ e limpa)
 const numeroRaw = mensagemObj?.chave?.cleanedSenderPn || mensagemObj?.chave?.senderPn || "";
 const numero = String(numeroRaw).split('@').replace(/\D/g, '');
