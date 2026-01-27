@@ -130,7 +130,12 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    const numero = remoteJid.split('@')[0]; // Pega "5551999..."
+    let numeroRaw = 
+      dadosMensagem.key?.cleanedSenderPn || 
+      dadosMensagem.key?.senderPn || 
+      remoteJid;
+      
+    const numero = String(numeroRaw).split('@')[0].replace(/\D/g, '');
 
     // 4. Extração do Texto
     // O suporte mostrou que pode vir em "messageBody" ou dentro de "message.conversation"
