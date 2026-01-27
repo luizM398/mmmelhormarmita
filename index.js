@@ -100,10 +100,15 @@ console.log(JSON.stringify(req.body, null, 2));
 
   // 🔹 LEITURA CORRETA WA SENDER (mensagens reais)
 
-const msg = req.body?.dados?.mensagens;
+const body = req.body || {};
+
+const msg =
+  body?.dados?.mensagens ||
+  body?.data?.messages ||
+  body?.messages;
 
 if (!msg) {
-  console.log('Webhook sem mensagens', body);
+  console.log('Webhook sem mensagens' , req.body);
   return res.status(200).json({ ok: true });
 }
 
