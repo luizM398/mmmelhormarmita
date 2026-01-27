@@ -115,6 +115,16 @@ app.post('/mensagem', async (req, res) => {
     const remoteJid = dadosMensagem.key?.remoteJid || "";
     const fromMe = dadosMensagem.key?.fromMe;
 
+    // Ignora Status (Stories)
+    if (remoteJid.includes('status@broadcast')) {
+      return res.status(200).json({ ok: true, info: 'Status ignorado' });
+    }
+
+    // Ignora Grupos (Opcional, mas recomendado para evitar que o bot responda em grupos)
+    if (remoteJid.includes('@g.us')) {
+      return res.status(200).json({ ok: true, info: 'Grupo ignorado' });
+    }
+
     // Ignora mensagens enviadas pelo próprio bot para evitar loop infinito
     if (fromMe === true) {
       return res.status(200).json({ ok: true });
