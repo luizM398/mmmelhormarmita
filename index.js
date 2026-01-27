@@ -108,7 +108,7 @@ const msg =
   body?.messages;
 
 if (!msg) {
-  console.log('Webhook sem mensagens' , req.body);
+  console.log('Webhook sem mensagens', req.body);
   return res.status(200).json({ ok: true });
 }
 
@@ -121,11 +121,15 @@ const numero =
 const texto =
   mensagemObj?.messageBody ||
   mensagemObj?.mensagem?.conversa;
-  if (!numero) {
-  console.log('Mensagem sem cleanedSenderPn, ignorando');
+
+if (!numero || !texto) {
+  console.log('Webhook recebido sem texto ou número', {
+    numero,
+    texto,
+    mensagemObj
+  });
   return res.status(200).json({ ok: true });
 }
-const texto = msg?.messageBody || msg?.mensagem?.conversa;
 
 if (!numero || !texto) {
   console.log('Webhook recebido sem texto ou número', { numero, texto });
