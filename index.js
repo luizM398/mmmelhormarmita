@@ -83,6 +83,36 @@ async function enviarMensagemWA(numero, texto) {
   }
 }
 
+// === NOVA FUNÇÃO DE ENQUETE ===
+  
+async function enviarEnqueteWA(numero, pergunta, opcoes) {
+  const token = process.env.WASENDER_TOKEN || 'SUA_CHAVE_AQUI';
+  const numeroLimpo = String(numero).replace(/\D/g, '');
+
+  try {
+    await axios.post(
+      'https://www.wasenderapi.com/api/send-message',
+      {
+        to: numeroLimpo,
+        poll: {
+          question: pergunta,
+          options: opcoes,
+          multiSelect: false
+        }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    console.log(`Enquete enviada para ${numeroLimpo}`);
+  } catch (err) {
+    console.error('Erro ao enviar enquete:', err.response?.data || err.message);
+  }
+}
+
 // ================= ROTAS =================
 
 app.get('/', (req, res) => {
@@ -135,7 +165,13 @@ app.post('/mensagem', async (req, res) => {
       dadosMensagem.key?.senderPn || 
       remoteJid;
       
-    const numero = String(numeroRaw).split('@')[0].replace(/\D/g, '');
+    // === TRADUTOR DE BOTÕES ===
+    let mensagem = texto.trim().toLowerCase();
+
+    // Se o cliente clicou no botão, transformamos em número aqui:
+    if (mensagem.includes('ver cardápio')) mensagem = '1';
+    if (mensagem.includes('fazer pedido')) mensagem = '2';
+    if (mensagem.includes('elogios')) mensagem = '3';
 
     // 4. Extração do Texto
     // O suporte mostrou que pode vir em "messageBody" ou dentro de "message.conversation"
@@ -171,15 +207,24 @@ app.post('/mensagem', async (req, res) => {
 
     cliente.ultimoContato = Date.now();
 
-    // ===== PRIMEIRO CONTATO =====
-    if (!cliente.recebeuSaudacao) {
-      cliente.recebeuSaudacao = true;
-      cliente.estado = 'MENU';
-      resposta = saudacaoTexto() + menuPrincipal();
-      cliente.ultimaMensagem = resposta;
-      await enviarMensagemWA(numero, resposta);
-      return res.status(200).json({ ok: true });
-    }
+    // ===== PRIMEIRO CONTATO (COM BOTÕES) =====
+  if (!cliente.recebeuSaudacao) {
+    cliente.recebeuSaudacao = true;
+    cliente.estado = 'MENU';
+
+    // 1. Manda a saudação em texto normal
+    const textoOla = saudacaoTexto();
+    await enviarMensagemWA(numero, textoOla);
+
+    // 2. Manda o Menu em forma de Botões (Enquete)
+    await enviarEnqueteWA(numero, "O que você deseja hoje?", [
+      "1. Ver Cardápio",
+      "2. Fazer Pedido",
+      "3. Elogios"
+    ]);
+
+    return res.status(200).json({ ok: true });
+  }
     
     // ===== CANCELAR GERAL =====
     if (mensagem === 'cancelar') {
