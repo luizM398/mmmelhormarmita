@@ -11,8 +11,19 @@ app.use((req, res, next) => {
 });
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json({ limit: '10mb', type: '*/*' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString();
+  }
+}));
+
+app.use(express.urlencoded({
+  extended: true,
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString();
+  }
+}));
 
 const TEMPO_INATIVO = 10 * 60 * 1000;
 
@@ -89,10 +100,15 @@ console.log(JSON.stringify(req.body, null, 2));
 
   // 🔹 LEITURA CORRETA WA SENDER (mensagens reais)
 
-const msg = req.body?.dados?.mensagens;
+const body = req.body || {};
+
+const msg =
+  body?.dados?.mensagens ||
+  body?.data?.messages ||
+  body?.messages;
 
 if (!msg) {
-  console.log('Webhook sem mensagens');
+  console.log('Webhook sem mensagens', body);
   return res.status(200).json({ ok: true });
 }
 
