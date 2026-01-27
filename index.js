@@ -103,19 +103,6 @@ console.log(JSON.stringify(req.body, null, 2));
 const msg = req.body?.dados?.mensagens;
 
 if (!msg) {
-  console.log('Webhook sem mensagens', req.body);
-  return res.status(200).json({ ok: true });
-}
-
-const numero = msg?.chave?.cleanedSenderPn;
-const texto = msg?.messageBody || msg?.mensagem?.conversa;
-
-if (!numero || !texto) {
-  console.log('Webhook recebido sem texto ou número', { numero, texto });
-  return res.status(200).json({ ok: true });
-}
-
-if (!msg) {
   console.log('Webhook sem mensagens', body);
   return res.status(200).json({ ok: true });
 }
