@@ -115,6 +115,8 @@ if (!msg) {
 const numero = String(
   msg?.chave?.cleanedSenderPn ||
   msg?.chave?.senderPn ||
+  msg?.cleanedSenderPn ||      // 👈 NOVO
+  msg?.senderPn ||             // 👈 NOVO
   ''
 ).replace(/\D/g, '');
 const texto = msg?.messageBody || msg?.mensagem?.conversa;
