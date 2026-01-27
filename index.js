@@ -104,32 +104,29 @@ console.log(JSON.stringify(req.body, null, 2));
 
 const body = req.body || {};
 
-// O WA Sender envia dentro de dados.mensagens (que é um objeto, não array)
-const mensagemObj = body?.dados?.mensagens;
+// 🔹 Pega o objeto da mensagem (trata plural, singular e dados do WA Sender)
+const mensagemObj = body?.dados?.mensagens || body?.dados?.message || body?.message;
 
 if (!mensagemObj) {
   console.log('Webhook sem mensagens estruturadas');
   return res.status(200).json({ ok: true });
 }
 
-// 🔹 A MUDANÇA ESTÁ AQUI:
-// O número real para envio está em cleanedSenderPn ou senderPn
-const numeroRaw = mensagemObj?.chave?.cleanedSenderPn || mensagemObj?.chave?.senderPn;
-const numero = numeroRaw ? numeroRaw.split('@')[0].replace(/\D/g, '') : null;
+// 🔹 Captura e limpa o NÚMERO (Pega o que vem antes do @ e limpa)
+const numeroRaw = mensagemObj?.chave?.cleanedSenderPn || mensagemObj?.chave?.senderPn || "";
+const numero = String(numeroRaw).split('@').replace(/\D/g, '');
 
-// O texto pode vir em 'messageBody' ou dentro do objeto 'mensagem'
-const texto =
+// 🔹 Captura o TEXTO
+const textoRaw = 
   mensagemObj?.messageBody || 
   mensagemObj?.mensagem?.conversa || 
-  mensagemObj?.mensagem?.extendedTextMessage?.text;
+  mensagemObj?.mensagem?.extendedTextMessage?.text || 
+  "";
+const texto = String(textoRaw).trim();
 
-if (!numero || !texto) {
-  console.log('Webhook recebido sem número ou texto capturado', {
-    numero,
-    texto
-  });
-  return res.status(200).json({ ok: true });
-}
+// 🔹 Prepara para o bot processar
+const mensagem = texto.toLowerCase();
+
  
 const mensagem = String(texto).trim().toLowerCase();
 
