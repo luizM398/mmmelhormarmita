@@ -112,7 +112,15 @@ if (!msg) {
   return res.status(200).json({ ok: true });
 }
 
-const numero = msg?.chave?.cleanedSenderPn;
+const mensagemObj = Array.isArray(msg) ? msg[0] : msg;
+
+const numero =
+  mensagemObj?.chave?.cleanedSenderPn ||
+  mensagemObj?.chave?.senderPn?.replace(/\D/g, '');
+
+const texto =
+  mensagemObj?.messageBody ||
+  mensagemObj?.mensagem?.conversa;
   if (!numero) {
   console.log('Mensagem sem cleanedSenderPn, ignorando');
   return res.status(200).json({ ok: true });
