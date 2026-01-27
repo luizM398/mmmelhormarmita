@@ -1,30 +1,41 @@
+// estadoClientes.js
+
+// Armazenamento em memória (ATENÇÃO: É apagado se o servidor reiniciar)
 const clientes = {};
 
 function getEstado(numero) {
   if (!clientes[numero]) {
     clientes[numero] = {
-      estado: 'MENU',
-      pedido: [],
-      quantidadeTotal: 0
+      numero: numero,
+      estado: 'INICIAL', // Estado inicial
+      recebeuSaudacao: false,
+      ultimoContato: Date.now(),
+      ultimaMensagem: '',
+      pedido: [], // Array para guardar os itens
+      opcoesPrato: [], // Cache do menu atual
+      endereco: '',
+      // Variáveis auxiliares de fluxo
+      estadoAnterior: null,
+      mensagemAntesDoCancelar: null,
+      precisaArroz: false,
+      precisaStrogonoff: false
     };
   }
   return clientes[numero];
 }
 
-function setEstado(numero, novoEstado) {
-  const cliente = getEstado(numero);
-  cliente.estado = novoEstado;
-}
-
 function limparPedido(numero) {
-  const cliente = getEstado(numero);
-  cliente.pedido = [];
-  cliente.quantidadeTotal = 0;
-  cliente.estado = 'MENU';
+  if (clientes[numero]) {
+    // Mantemos apenas dados básicos, resetamos o pedido
+    clientes[numero].estado = 'INICIAL';
+    clientes[numero].pedido = [];
+    clientes[numero].recebeuSaudacao = false;
+    clientes[numero].endereco = '';
+    clientes[numero].opcoesPrato = [];
+  }
 }
 
 module.exports = {
   getEstado,
-  setEstado,
   limparPedido
 };
