@@ -87,29 +87,6 @@ app.post('/mensagem', async (req, res) => {
   console.log('ENTROU NA /mensagem');
 console.log(JSON.stringify(req.body, null, 2));
 
-  // 🔹 LEITURA CORRETA WA SENDER (mensagens reais)
-
-// 🔹 LEITURA DO WEBHOOK (FORMA ÚNICA E CONFIÁVEL)
-
-const body = req.body || {};
-
-// 🔹 Pega o objeto da mensagem (trata plural, singular e dados do WA Sender)
-// Tenta pegar o objeto diretamente ou parsear se for string
-let dadosObj = body?.dados;
-if (typeof dadosObj === 'string') {
-    try {
-        dadosObj = JSON.parse(dadosObj);
-    } catch (e) {
-        console.error("Erro ao fazer parse do objeto dados", e);
-    }
-}
-
-const mensagemObj = dadosObj?.mensagens || dadosObj?.message || body?.message;
-
-if (!mensagemObj) {
-  console.log('Webhook sem mensagens estruturadas');
-  return res.status(200).json({ ok: true });}
-
 // 🔹 Captura e limpa o NÚMERO (Pega o que vem antes do @ e limpa)
 const numeroRaw = mensagemObj?.chave?.cleanedSenderPn || mensagemObj?.chave?.senderPn || "";
 const numero = String(numeroRaw).split('@').replace(/\D/g, '');
