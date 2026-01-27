@@ -104,35 +104,33 @@ console.log(JSON.stringify(req.body, null, 2));
 
 const body = req.body || {};
 
-const msg =
-  body?.dados?.mensagens ||
-  body?.data?.messages ||
-  body?.messages;
+// O WA Sender envia dentro de dados.mensagens (que é um objeto, não array)
+const mensagemObj = body?.dados?.mensagens;
 
-if (!msg) {
-  console.log('Webhook sem mensagens', body);
+if (!mensagemObj) {
+  console.log('Webhook sem mensagens estruturadas');
   return res.status(200).json({ ok: true });
 }
 
-const mensagemObj = Array.isArray(msg) ? msg[0] : msg;
+// 🔹 A MUDANÇA ESTÁ AQUI:
+// O número real para envio está em cleanedSenderPn ou senderPn
+const numeroRaw = mensagemObj?.chave?.cleanedSenderPn || mensagemObj?.chave?.senderPn;
+const numero = numeroRaw ? numeroRaw.split('@')[0].replace(/\D/g, '') : null;
 
-const numero =
-  mensagemObj?.chave?.cleanedSenderPn ||
-  mensagemObj?.chave?.senderPn?.replace(/\D/g, '');
-
+// O texto pode vir em 'messageBody' ou dentro do objeto 'mensagem'
 const texto =
-  mensagemObj?.messageBody ||
-  mensagemObj?.mensagem?.conversa;
+  mensagemObj?.messageBody || 
+  mensagemObj?.mensagem?.conversa || 
+  mensagemObj?.mensagem?.extendedTextMessage?.text;
 
 if (!numero || !texto) {
-  console.log('Webhook recebido sem número ou texto', {
+  console.log('Webhook recebido sem número ou texto capturado', {
     numero,
-    texto,
-    mensagemObj
+    texto
   });
   return res.status(200).json({ ok: true });
 }
-  
+ 
 const mensagem = String(texto).trim().toLowerCase();
 
   const cliente = estadoClientes.getEstado(numero);
