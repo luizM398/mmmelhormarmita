@@ -7,7 +7,7 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuração para processar o JSON automaticamente (conforme suporte WaSender)
+// Configuração para processar o JSON automaticamente
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -23,6 +23,7 @@ function saudacaoTexto() {
 }
 
 function menuPrincipal() {
+  // Mantemos essa função para usar como texto de fallback se precisar
   return (
     `\n\nO que você deseja hoje?\n\n` +
     `1️⃣ Ver cardápio\n` +
@@ -56,11 +57,9 @@ function erroComUltimaMensagem(cliente) {
   );
 }
 
+// Função para enviar TEXTO simples
 async function enviarMensagemWA(numero, texto) {
-  // ATENÇÃO: Nunca suba chaves reais para o GitHub público. Use variáveis de ambiente no Render.
-  const token = process.env.WASENDER_TOKEN || 'SUA_CHAVE_AQUI_SE_FOR_TESTE_LOCAL';
-  
-  // Formatando número para garantir que tenha apenas digitos (WaSender geralmente aceita o numero limpo ou com @s.whatsapp.net, vamos limpar)
+  const token = process.env.WASENDER_TOKEN || 'SUA_CHAVE_AQUI';
   const numeroLimpo = String(numero).replace(/\D/g, '');
 
   try {
@@ -83,8 +82,7 @@ async function enviarMensagemWA(numero, texto) {
   }
 }
 
-// === NOVA FUNÇÃO DE ENQUETE ===
-  
+// Função para enviar ENQUETE (Botões)
 async function enviarEnqueteWA(numero, pergunta, opcoes) {
   const token = process.env.WASENDER_TOKEN || 'SUA_CHAVE_AQUI';
   const numeroLimpo = String(numero).replace(/\D/g, '');
@@ -123,58 +121,41 @@ app.post('/mensagem', async (req, res) => {
   try {
     const body = req.body;
     
-    // LOG para debug no Render (verifique isso nos logs se der erro)
-    console.log('WEBHOOK RECEBIDO:', JSON.stringify(body, null, 2));
-
-    // 1. Validação do Evento (conforme suporte WaSender)
-    // Se não for recebimento de mensagem, ignoramos
+    // 1. Validação do Evento
     if (body.event !== 'messages.received') {
       return res.status(200).json({ ok: true, info: 'Evento ignorado' });
     }
 
-    // 2. Extração dos dados (baseado na resposta do suporte)
     const dadosMensagem = body?.data?.messages;
-    
     if (!dadosMensagem) {
-      console.log('Payload sem dados de mensagem.');
       return res.status(200).json({ ok: true });
     }
 
-    // 3. Identificação do Remetente
-    // O suporte mostrou "remoteJid": "123456789@lid" ou @s.whatsapp.net
+    // 2. Identificação do Remetente e Filtros
     const remoteJid = dadosMensagem.key?.remoteJid || "";
     const fromMe = dadosMensagem.key?.fromMe;
 
-    // Ignora Status (Stories)
     if (remoteJid.includes('status@broadcast')) {
       return res.status(200).json({ ok: true, info: 'Status ignorado' });
     }
 
-    // Ignora Grupos (Opcional, mas recomendado para evitar que o bot responda em grupos)
     if (remoteJid.includes('@g.us')) {
       return res.status(200).json({ ok: true, info: 'Grupo ignorado' });
     }
 
-    // Ignora mensagens enviadas pelo próprio bot para evitar loop infinito
     if (fromMe === true) {
       return res.status(200).json({ ok: true });
     }
 
+    // Correção do número (LID vs Telefone)
     let numeroRaw = 
       dadosMensagem.key?.cleanedSenderPn || 
       dadosMensagem.key?.senderPn || 
       remoteJid;
       
-    // === TRADUTOR DE BOTÕES ===
-    let mensagem = texto.trim().toLowerCase();
+    const numero = String(numeroRaw).split('@')[0].replace(/\D/g, '');
 
-    // Se o cliente clicou no botão, transformamos em número aqui:
-    if (mensagem.includes('ver cardápio')) mensagem = '1';
-    if (mensagem.includes('fazer pedido')) mensagem = '2';
-    if (mensagem.includes('elogios')) mensagem = '3';
-
-    // 4. Extração do Texto
-    // O suporte mostrou que pode vir em "messageBody" ou dentro de "message.conversation"
+    // 3. Extração do Texto (Corrigido ordem)
     const texto = 
       dadosMensagem.messageBody || 
       dadosMensagem.message?.conversation || 
@@ -182,49 +163,63 @@ app.post('/mensagem', async (req, res) => {
       "";
 
     if (!texto || !numero) {
-      return res.status(200).json({ ok: true }); // Mensagem vazia ou sem numero
+      return res.status(200).json({ ok: true });
     }
 
-    const mensagem = texto.trim().toLowerCase();
+    // 4. Criação da variável mensagem e Tradução dos Botões
+    let mensagem = texto.trim().toLowerCase();
+
+    // Se o cliente clicou no botão da enquete, o texto vem completo.
+    // Transformamos em "1", "2" ou "3" para o bot entender.
+    if (mensagem.includes('ver cardápio')) mensagem = '1';
+    if (mensagem.includes('fazer pedido')) mensagem = '2';
+    if (mensagem.includes('elogios')) mensagem = '3';
     
-    // --- LÓGICA DO BOT (MANTIDA DO SEU CÓDIGO) ---
+    // --- LÓGICA DO BOT ---
     
     const cliente = estadoClientes.getEstado(numero);
     let resposta = '';
 
-    // Verifica Inatividade ANTES de atualizar o ultimoContato
+    // Verifica Inatividade
     if (encerrouPorInatividade(cliente) && cliente.estado !== 'INICIAL') {
       estadoClientes.limparPedido(numero);
-      resposta = `⏰ Seu atendimento foi encerrado por inatividade.\n\n` + saudacaoTexto() + menuPrincipal();
+      
+      const textoInatividade = `⏰ Seu atendimento foi encerrado por inatividade.\n\n` + saudacaoTexto();
+      await enviarMensagemWA(numero, textoInatividade);
+      
+      // Manda o menu como enquete novamente
+      await enviarEnqueteWA(numero, "O que deseja fazer agora?", [
+        "1. Ver Cardápio",
+        "2. Fazer Pedido",
+        "3. Elogios"
+      ]);
       
       cliente.ultimoContato = Date.now();
-      cliente.ultimaMensagem = resposta;
       cliente.estado = 'MENU';
       
-      await enviarMensagemWA(numero, resposta); 
       return res.status(200).json({ ok: true });
     }
 
     cliente.ultimoContato = Date.now();
 
-    // ===== PRIMEIRO CONTATO (COM BOTÕES) =====
-  if (!cliente.recebeuSaudacao) {
-    cliente.recebeuSaudacao = true;
-    cliente.estado = 'MENU';
+    // ===== PRIMEIRO CONTATO (Com Botões) =====
+    if (!cliente.recebeuSaudacao) {
+      cliente.recebeuSaudacao = true;
+      cliente.estado = 'MENU';
+      
+      // Manda msg de texto
+      const textoOla = saudacaoTexto();
+      await enviarMensagemWA(numero, textoOla);
+      
+      // Manda Botões
+      await enviarEnqueteWA(numero, "O que você deseja hoje?", [
+        "1. Ver Cardápio",
+        "2. Fazer Pedido",
+        "3. Elogios"
+      ]);
 
-    // 1. Manda a saudação em texto normal
-    const textoOla = saudacaoTexto();
-    await enviarMensagemWA(numero, textoOla);
-
-    // 2. Manda o Menu em forma de Botões (Enquete)
-    await enviarEnqueteWA(numero, "O que você deseja hoje?", [
-      "1. Ver Cardápio",
-      "2. Fazer Pedido",
-      "3. Elogios"
-    ]);
-
-    return res.status(200).json({ ok: true });
-  }
+      return res.status(200).json({ ok: true });
+    }
     
     // ===== CANCELAR GERAL =====
     if (mensagem === 'cancelar') {
@@ -232,6 +227,7 @@ app.post('/mensagem', async (req, res) => {
       cliente.mensagemAntesDoCancelar = cliente.ultimaMensagem;
       cliente.estado = 'CONFIRMAR_CANCELAMENTO';
 
+      // Aqui também podemos usar enquete no futuro se quiser
       resposta = `⚠️ Tem certeza que deseja cancelar o pedido?\n\n1️⃣ Sim, cancelar\n2️⃣ Não, continuar`;
 
       cliente.ultimaMensagem = resposta;
@@ -239,15 +235,19 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    // ===== LÓGICA DE CANCELAMENTO =====
+    // ===== CONFIRMAR CANCELAMENTO =====
     if (cliente.estado === 'CONFIRMAR_CANCELAMENTO') {
       if (mensagem === '1') {
         estadoClientes.limparPedido(numero);
-        // Reinicia como se fosse novo, mas já com menu
         cliente.estado = 'MENU'; 
-        resposta = `❌ Pedido cancelado.\n\n` + menuPrincipal();
-        cliente.ultimaMensagem = resposta;
-        await enviarMensagemWA(numero, resposta); 
+        
+        await enviarMensagemWA(numero, "❌ Pedido cancelado.");
+        await enviarEnqueteWA(numero, "Menu Principal", [
+            "1. Ver Cardápio",
+            "2. Fazer Pedido",
+            "3. Elogios"
+        ]);
+        
         return res.status(200).json({ ok: true });
       }
       if (mensagem === '2') {
@@ -257,14 +257,13 @@ app.post('/mensagem', async (req, res) => {
         await enviarMensagemWA(numero, resposta); 
         return res.status(200).json({ ok: true });
       }
-      // Se digitou algo inválido no cancelamento
       await enviarMensagemWA(numero, erroComUltimaMensagem(cliente));
       return res.status(200).json({ ok: true });
     }
 
-    // ================= MENU =================
+    // ================= MENU (Agora aceita os cliques dos botões) =================
     if (cliente.estado === 'MENU') {
-      if (mensagem === '1') { // Ver Cardápio (Apenas visualização)
+      if (mensagem === '1') { // Ver Cardápio
         const dados = carregarMenu();
         if(dados.length === 0) {
             await enviarMensagemWA(numero, "Desculpe, cardápio indisponível no momento.");
@@ -274,22 +273,28 @@ app.post('/mensagem', async (req, res) => {
         let cardapio = `🍱 *Cardápio*\n\n`;
         dados.forEach(item => { cardapio += `• ${item.PRATO} – R$ ${item.VALOR}\n`; });
         
-        cardapio += `\n1️⃣ Voltar ao menu\n2️⃣ Fazer pedido`;
+        // Finaliza com texto pois lista longa não cabe em botão
+        cardapio += `\nPara pedir, digite *2* ou selecione no menu acima.`;
 
-        cliente.estado = 'CARDAPIO';
-        cliente.ultimaMensagem = cardapio;
+        cliente.estado = 'CARDAPIO'; // Mantemos no estado cardapio ou menu?
+        // Vamos manter no menu para ele poder clicar em "Fazer Pedido" de novo se quiser
+        // Mas se quiser voltar, ele manda "1" de novo. 
+        // Simplificação: vamos mandar o cardápio e logo em seguida a enquete de novo
+        
         await enviarMensagemWA(numero, cardapio);
+        await enviarEnqueteWA(numero, "O que deseja fazer?", ["1. Ver Cardápio", "2. Fazer Pedido", "3. Elogios"]);
+        
         return res.status(200).json({ ok: true });
       }
 
-      if (mensagem === '2') { // Fazer Pedido Direto
+      if (mensagem === '2') { // Fazer Pedido
         const dados = carregarMenu();
         if(dados.length === 0) {
-            await enviarMensagemWA(numero, "Desculpe, cardápio indisponível no momento.");
+            await enviarMensagemWA(numero, "Desculpe, cardápio indisponível.");
             return res.status(200).json({ok:true});
         }
 
-        let lista = `🍽️ Escolha um prato:\n\n`;
+        let lista = `🍽️ *Escolha um prato digitando o número:*\n\n`;
         dados.forEach((item, i) => { lista += `${i + 1}️⃣ ${item.PRATO}\n`; });
         lista += `\n0️⃣ Voltar ao menu`;
 
@@ -308,55 +313,40 @@ app.post('/mensagem', async (req, res) => {
         return res.status(200).json({ ok: true });
       }
 
-      await enviarMensagemWA(numero, erroComUltimaMensagem(cliente));
+      // Se digitou algo nada a ver
+      await enviarMensagemWA(numero, "Não entendi. Use os botões abaixo:");
+      await enviarEnqueteWA(numero, "Menu Principal", ["1. Ver Cardápio", "2. Fazer Pedido", "3. Elogios"]);
       return res.status(200).json({ ok: true });
     }
 
-    // ================= CARDAPIO (Visualização) =================
+    // ================= CARDAPIO =================
     if (cliente.estado === 'CARDAPIO') {
-      if (mensagem === '1') {
+        // Se ele estava só vendo cardápio e digitou algo, tratamos como menu
         cliente.estado = 'MENU';
-        resposta = menuPrincipal();
-        cliente.ultimaMensagem = resposta;
-        await enviarMensagemWA(numero, resposta);
+        // Reprocessa a mensagem como se estivesse no menu
+        // Mas como já retornamos lá em cima, o fluxo segue na proxima msg
+        // Aqui só cai se ele digitou algo estranho enquanto via cardápio
+        await enviarEnqueteWA(numero, "Menu Principal", ["1. Ver Cardápio", "2. Fazer Pedido", "3. Elogios"]);
         return res.status(200).json({ ok: true });
-      }
-      if (mensagem === '2') {
-        const dados = carregarMenu();
-        let lista = `🍽️ Escolha um prato:\n\n`;
-        dados.forEach((item, i) => { lista += `${i + 1}️⃣ ${item.PRATO}\n`; });
-        lista += `\n0️⃣ Voltar ao menu`;
-
-        cliente.estado = 'ESCOLHENDO_PRATO';
-        cliente.opcoesPrato = dados;
-        cliente.ultimaMensagem = lista;
-        await enviarMensagemWA(numero, lista);
-        return res.status(200).json({ ok: true });
-      }
-      await enviarMensagemWA(numero, erroComUltimaMensagem(cliente));
-      return res.status(200).json({ ok: true });
     }
 
     // ================= ESCOLHENDO PRATO =================
     if (cliente.estado === 'ESCOLHENDO_PRATO') {
       if (mensagem === '0') {
         cliente.estado = 'MENU';
-        resposta = menuPrincipal();
-        cliente.ultimaMensagem = resposta;
-        await enviarMensagemWA(numero, resposta); 
+        await enviarEnqueteWA(numero, "Menu Principal", ["1. Ver Cardápio", "2. Fazer Pedido", "3. Elogios"]);
         return res.status(200).json({ ok: true });
       }
 
       const escolha = parseInt(mensagem);
       if (isNaN(escolha) || escolha < 1 || escolha > cliente.opcoesPrato.length) {
-        await enviarMensagemWA(numero, erroComUltimaMensagem(cliente));
+        await enviarMensagemWA(numero, "Opção inválida. Digite o número do prato.");
         return res.status(200).json({ ok: true });
       }
 
       const prato = cliente.opcoesPrato[escolha - 1];
       const nomePrato = prato.PRATO.toLowerCase();
 
-      // Inicia item no pedido
       cliente.pedido.push({
         prato: prato.PRATO,
         valor: prato.VALOR,
@@ -370,55 +360,63 @@ app.post('/mensagem', async (req, res) => {
 
       if (cliente.precisaArroz) {
         cliente.estado = 'VARIACAO_ARROZ';
-        resposta = `🍚 Escolha o tipo de arroz:\n1️⃣ Branco\n2️⃣ Integral`;
+        // AQUI TAMBÉM PODE VIRAR ENQUETE!
+        await enviarEnqueteWA(numero, "🍚 Escolha o tipo de arroz:", ["1. Branco", "2. Integral"]);
       } else if (cliente.precisaStrogonoff) {
         cliente.estado = 'VARIACAO_STROGONOFF';
-        resposta = `🍛 Escolha o tipo de strogonoff:\n1️⃣ Tradicional\n2️⃣ Light`;
+        await enviarEnqueteWA(numero, "🍛 Escolha o strogonoff:", ["1. Tradicional", "2. Light"]);
       } else {
         cliente.estado = 'QUANTIDADE';
         resposta = `Digite a quantidade para *${prato.PRATO}*:`;
+        await enviarMensagemWA(numero, resposta);
       }
-
-      cliente.ultimaMensagem = resposta;
-      await enviarMensagemWA(numero, resposta); 
       return res.status(200).json({ ok: true });
     }
 
     // ================= VARIAÇÃO ARROZ =================
     if (cliente.estado === 'VARIACAO_ARROZ') {
+      // Traduz enquete de arroz se precisar
+      let escolhaArroz = mensagem;
+      if(mensagem.includes('branco')) escolhaArroz = '1';
+      if(mensagem.includes('integral')) escolhaArroz = '2';
+
       const itemAtual = cliente.pedido[cliente.pedido.length - 1];
-      if (mensagem === '1') itemAtual.arroz = 'Branco';
-      else if (mensagem === '2') itemAtual.arroz = 'Integral';
+      
+      if (escolhaArroz === '1') itemAtual.arroz = 'Branco';
+      else if (escolhaArroz === '2') itemAtual.arroz = 'Integral';
       else {
-        await enviarMensagemWA(numero, erroComUltimaMensagem(cliente));
+        await enviarMensagemWA(numero, "Opção inválida.");
         return res.status(200).json({ ok: true });
       }
 
       if (cliente.precisaStrogonoff) {
         cliente.estado = 'VARIACAO_STROGONOFF';
-        resposta = `🍛 Escolha o tipo de strogonoff:\n1️⃣ Tradicional\n2️⃣ Light`;
+        await enviarEnqueteWA(numero, "🍛 Escolha o strogonoff:", ["1. Tradicional", "2. Light"]);
       } else {
         cliente.estado = 'QUANTIDADE';
         resposta = `Digite a quantidade:`;
+        await enviarMensagemWA(numero, resposta);
       }
-      cliente.ultimaMensagem = resposta;
-      await enviarMensagemWA(numero, resposta); 
       return res.status(200).json({ ok: true });
     }
 
     // ================= VARIAÇÃO STROGONOFF =================
     if (cliente.estado === 'VARIACAO_STROGONOFF') {
+      let escolhaStrog = mensagem;
+      if(mensagem.includes('tradicional')) escolhaStrog = '1';
+      if(mensagem.includes('light')) escolhaStrog = '2';
+
       const itemAtual = cliente.pedido[cliente.pedido.length - 1];
-      if (mensagem === '1') itemAtual.strogonoff = 'Tradicional';
-      else if (mensagem === '2') itemAtual.strogonoff = 'Light';
+      
+      if (escolhaStrog === '1') itemAtual.strogonoff = 'Tradicional';
+      else if (escolhaStrog === '2') itemAtual.strogonoff = 'Light';
       else {
-        await enviarMensagemWA(numero, erroComUltimaMensagem(cliente));
+        await enviarMensagemWA(numero, "Opção inválida.");
         return res.status(200).json({ ok: true });
       }
 
       cliente.estado = 'QUANTIDADE';
       resposta = `Digite a quantidade:`;
-      cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
       return res.status(200).json({ ok: true });
     }
@@ -434,16 +432,20 @@ app.post('/mensagem', async (req, res) => {
       cliente.pedido[cliente.pedido.length - 1].quantidade = qtd;
       
       cliente.estado = 'ADICIONAR_OUTRO';
-      resposta = `✅ Adicionado com sucesso!\n\nDeseja pedir mais algo?\n1️⃣ Sim, escolher outro prato\n2️⃣ Não, fechar pedido`;
+      await enviarMensagemWA(numero, "✅ Adicionado!");
+      await enviarEnqueteWA(numero, "Deseja pedir mais algo?", ["1. Sim, escolher outro", "2. Não, fechar pedido"]);
       
-      cliente.ultimaMensagem = resposta;
-      await enviarMensagemWA(numero, resposta); 
       return res.status(200).json({ ok: true });
     }
 
     // ================= ADICIONAR OUTRO / FECHAR =================
     if (cliente.estado === 'ADICIONAR_OUTRO') {
-      if (mensagem === '1') {
+      // Traduz enquete
+      let decisao = mensagem;
+      if(mensagem.includes('sim')) decisao = '1';
+      if(mensagem.includes('não') || mensagem.includes('nao') || mensagem.includes('fechar')) decisao = '2';
+
+      if (decisao === '1') {
         cliente.estado = 'ESCOLHENDO_PRATO';
         const dados = carregarMenu();
         let lista = `🍽️ Escolha mais um prato:\n\n`;
@@ -455,14 +457,13 @@ app.post('/mensagem', async (req, res) => {
         return res.status(200).json({ ok: true });
       }
 
-      if (mensagem === '2') {
+      if (decisao === '2') {
         // CÁLCULO DE TOTAIS
         const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
         
         let valorUnitario = 19.99;
         let textoPromo = "";
         
-        // Regra de negócio (Exemplo)
         if (totalMarmitas >= 5) {
           valorUnitario = 17.49;
           textoPromo = `🎉 *Promoção Ativada!* (5+ unidades)\nPreço reduzido para R$ ${valorUnitario}/unidade.\n\n`;
@@ -483,24 +484,20 @@ app.post('/mensagem', async (req, res) => {
         return res.status(200).json({ ok: true });
       }
 
-      await enviarMensagemWA(numero, erroComUltimaMensagem(cliente));
+      await enviarMensagemWA(numero, "Opção inválida.");
       return res.status(200).json({ ok: true });
     }
 
     // ================= ENDEREÇO =================
     if (cliente.estado === 'AGUARDANDO_ENDERECO') {
-      cliente.endereco = texto; // Usa o texto original (com maiúsculas/minúsculas)
+      cliente.endereco = texto; 
       cliente.estado = 'FINALIZADO';
       
-      // AQUI ENTRARIA A LÓGICA DO MERCADO PAGO
-      // Por enquanto, apenas confirma
       resposta = 
         `✅ *Pedido Recebido!*\n\n` +
         `Endereço: ${cliente.endereco}\n\n` +
         `Aguarde, um atendente irá confirmar seu pedido e enviar o link de pagamento em instantes. 🛵`;
 
-      // Limpar o cliente após finalizar? Ou manter histórico?
-      // Por segurança, mantemos o estado FINALIZADO para não processar mais mensagens como pedido
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
       return res.status(200).json({ ok: true });
@@ -510,21 +507,21 @@ app.post('/mensagem', async (req, res) => {
     if (cliente.estado === 'ELOGIOS') {
       if (mensagem === '0') {
         cliente.estado = 'MENU';
-        resposta = menuPrincipal();
-        cliente.ultimaMensagem = resposta;
-        await enviarMensagemWA(numero, resposta);
+        await enviarEnqueteWA(numero, "Menu Principal", ["1. Ver Cardápio", "2. Fazer Pedido", "3. Elogios"]);
         return res.status(200).json({ ok: true });
       }
       console.log(`[FEEDBACK] Cliente ${numero}: ${texto}`);
       cliente.estado = 'MENU';
-      resposta = `✅ Obrigado! Sua opinião foi registrada.\n\n` + menuPrincipal();
-      cliente.ultimaMensagem = resposta;
-      await enviarMensagemWA(numero, resposta);
+      
+      await enviarMensagemWA(numero, `✅ Obrigado! Sua opinião foi registrada.`);
+      await enviarEnqueteWA(numero, "Menu Principal", ["1. Ver Cardápio", "2. Fazer Pedido", "3. Elogios"]);
+      
       return res.status(200).json({ ok: true });
     }
 
     // FALLBACK GERAL
-    await enviarMensagemWA(numero, saudacaoTexto() + menuPrincipal());
+    await enviarMensagemWA(numero, saudacaoTexto());
+    await enviarEnqueteWA(numero, "Menu Principal", ["1. Ver Cardápio", "2. Fazer Pedido", "3. Elogios"]);
     return res.status(200).json({ ok: true });
 
   } catch (error) {
