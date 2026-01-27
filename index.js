@@ -100,17 +100,12 @@ console.log(JSON.stringify(req.body, null, 2));
 
   // 🔹 LEITURA CORRETA WA SENDER (mensagens reais)
 
-// 🔕 IGNORA EVENTOS QUE NÃO SÃO MENSAGEM DE USUÁRIO
-if (
-  !msg ||
-  (!msg.messageBody && !msg?.mensagem?.conversa)
-) {
-  console.log('Evento ignorado (não é mensagem do usuário)', {
-    evento: body?.evento,
-    keysBody: Object.keys(body || {})
-  });
-  return res.status(200).json({ ok: true });
-}
+const body = req.body || {};
+
+const msg =
+  body?.dados?.mensagens ||
+  body?.data?.messages ||
+  body?.messages;
 
 if (!msg) {
   console.log('Webhook sem mensagens' , req.body);
