@@ -105,7 +105,17 @@ console.log(JSON.stringify(req.body, null, 2));
 const body = req.body || {};
 
 // 🔹 Pega o objeto da mensagem (trata plural, singular e dados do WA Sender)
-const mensagemObj = body?.dados?.mensagens || body?.dados?.message || body?.message;
+// Tenta pegar o objeto diretamente ou parsear se for string
+let dadosObj = body?.dados;
+if (typeof dadosObj === 'string') {
+    try {
+        dadosObj = JSON.parse(dadosObj);
+    } catch (e) {
+        console.error("Erro ao fazer parse do objeto dados", e);
+    }
+}
+
+const mensagemObj = dadosObj?.mensagens || dadosObj?.message || body?.message;
 
 if (!mensagemObj) {
   console.log('Webhook sem mensagens estruturadas');
