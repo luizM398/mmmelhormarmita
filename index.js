@@ -11,19 +11,8 @@ app.use((req, res, next) => {
 });
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json({
-  limit: '10mb',
-  verify: (req, res, buf) => {
-    req.rawBody = buf.toString();
-  }
-}));
-
-app.use(express.urlencoded({
-  extended: true,
-  verify: (req, res, buf) => {
-    req.rawBody = buf.toString();
-  }
-}));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
 
 const TEMPO_INATIVO = 10 * 60 * 1000;
 
