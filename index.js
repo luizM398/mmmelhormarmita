@@ -75,7 +75,7 @@ async function enviarMensagemWA(numero, texto) {
       },
       {
         headers: {
-          Authorization: 'Bearer SEU_TOKEN_AQUI',
+          Authorization: 'Bearer 399f73920f6d3300e39fc9f8f0e34eb40510a8a14847e288580d5d10e40cdae4',
           'Content-Type': 'application/json'
         }
       }
@@ -100,12 +100,20 @@ console.log(JSON.stringify(req.body, null, 2));
 
   // 🔹 LEITURA CORRETA WA SENDER (mensagens reais)
 
-const body = req.body || {};
+const msg = req.body?.dados?.mensagens;
 
-const msg =
-  body?.dados?.mensagens ||
-  body?.data?.messages ||
-  body?.messages;
+if (!msg) {
+  console.log('Webhook sem mensagens', req.body);
+  return res.status(200).json({ ok: true });
+}
+
+const numero = msg?.chave?.cleanedSenderPn;
+const texto = msg?.messageBody || msg?.mensagem?.conversa;
+
+if (!numero || !texto) {
+  console.log('Webhook recebido sem texto ou número', { numero, texto });
+  return res.status(200).json({ ok: true });
+}
 
 if (!msg) {
   console.log('Webhook sem mensagens', body);
