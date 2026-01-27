@@ -113,7 +113,7 @@ if (!msg) {
 }
 
 const numero = msg?.chave?.cleanedSenderPn ||
-  msg?.chave?.SenderPn.replace(/\D/g,'');
+  msg?.chave?.senderPn.replace(/\D/g,'');
 const texto = msg?.messageBody || msg?.mensagem?.conversa;
 
 if (!numero || !texto) {
