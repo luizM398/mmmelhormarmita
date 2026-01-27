@@ -100,6 +100,8 @@ console.log(JSON.stringify(req.body, null, 2));
 
   // 🔹 LEITURA CORRETA WA SENDER (mensagens reais)
 
+// 🔹 LEITURA DO WEBHOOK (FORMA ÚNICA E CONFIÁVEL)
+
 const body = req.body || {};
 
 const msg =
@@ -108,7 +110,7 @@ const msg =
   body?.messages;
 
 if (!msg) {
-  console.log('Webhook sem mensagens', req.body);
+  console.log('Webhook sem mensagens', body);
   return res.status(200).json({ ok: true });
 }
 
@@ -123,16 +125,11 @@ const texto =
   mensagemObj?.mensagem?.conversa;
 
 if (!numero || !texto) {
-  console.log('Webhook recebido sem texto ou número', {
+  console.log('Webhook recebido sem número ou texto', {
     numero,
     texto,
     mensagemObj
   });
-  return res.status(200).json({ ok: true });
-}
-
-if (!numero || !texto) {
-  console.log('Webhook recebido sem texto ou número', { numero, texto });
   return res.status(200).json({ ok: true });
 }
   
