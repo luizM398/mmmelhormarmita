@@ -112,7 +112,8 @@ if (!msg) {
   return res.status(200).json({ ok: true });
 }
 
-const numero = msg?.chave?.cleanedSenderPn;
+const numero = msg?.chave?.cleanedSenderPn ||
+  msg?.chave?.SenderPn.replace(/\D/g,'');
 const texto = msg?.messageBody || msg?.mensagem?.conversa;
 
 if (!numero || !texto) {
