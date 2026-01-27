@@ -53,17 +53,17 @@ function erroComUltimaMensagem(cliente) {
   );
 }
 
-async function enviarMensagemWA(numeroLimpo, texto) {
+async function enviarMensagemWA(numero, texto) {
   try {
     await axios.post(
       'https://www.wasenderapi.com/api/send-message',
       {
-        to: numeroLimpo,
+        to: numero,          // 👈 cleanedSenderPn (SEM @lid, SEM @whatsapp)
         text: texto
       },
       {
         headers: {
-          Authorization: 'Bearer 399f73920f6d3300e39fc9f8f0e34eb40510a8a14847e288580d5d10e40cdae4',
+          Authorization: 'Bearer SEU_TOKEN_AQUI',
           'Content-Type': 'application/json'
         }
       }
