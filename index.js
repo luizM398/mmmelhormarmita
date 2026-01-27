@@ -127,9 +127,6 @@ const texto = String(textoRaw).trim();
 // 🔹 Prepara para o bot processar
 const mensagem = texto.toLowerCase();
 
- 
-const mensagem = String(texto).trim().toLowerCase();
-
   const cliente = estadoClientes.getEstado(numero);
   let resposta = '';
 
