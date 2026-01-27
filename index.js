@@ -112,9 +112,11 @@ if (!msg) {
   return res.status(200).json({ ok: true });
 }
 
-const numero = msg?.chave?.cleanedSenderPn ||
-  msg?.chave?.senderPn?.replace(/\D/g,'') ||
-  msg?.senderPn?.replace(/\D/g, '');
+const numero = String(
+  msg?.chave?.cleanedSenderPn ||
+  msg?.chave?.senderPn ||
+  ''
+).replace(/\D/g, '');
 const texto = msg?.messageBody || msg?.mensagem?.conversa;
 
 if (!numero || !texto) {
