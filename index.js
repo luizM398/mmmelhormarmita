@@ -11,8 +11,19 @@ app.use((req, res, next) => {
 });
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString();
+  }
+}));
+
+app.use(express.urlencoded({
+  extended: true,
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString();
+  }
+}));
 
 const TEMPO_INATIVO = 10 * 60 * 1000;
 
@@ -59,7 +70,7 @@ async function enviarMensagemWA(numero, texto) {
     await axios.post(
       'https://www.wasenderapi.com/api/send-message',
       {
-        to: numero,          // 👈 cleanedSenderPn (SEM @lid, SEM @whatsapp)
+        to: numero,
         text: texto
       },
       {
@@ -85,30 +96,42 @@ app.get('/', (req, res) => {
 
 app.post('/mensagem', async (req, res) => {
   console.log('ENTROU NA /mensagem');
-console.log(JSON.stringify(req.body, null, 2));
+  console.log(JSON.stringify(req.body, null, 2));
 
-  // ✅ LEITURA CORRETA DO PAYLOAD WASENDER
-const mensagemObj = req.body?.dados?.mensagens;
+  const body = req.body || {};
 
-if (!mensagemObj) {
-  console.log('Webhook sem mensagens estruturadas');
-  return res.status(200).json({ ok: true });
-}
+  // Pega o objeto da mensagem
+  let dadosObj = body?.dados;
+  if (typeof dadosObj === 'string') {
+    try {
+      dadosObj = JSON.parse(dadosObj);
+    } catch (e) {
+      console.error("Erro ao fazer parse do objeto dados", e);
+    }
+  }
 
-// 🔹 Captura e limpa o NÚMERO (Pega o que vem antes do @ e limpa)
-const numeroRaw = mensagemObj?.chave?.cleanedSenderPn || mensagemObj?.chave?.senderPn || "";
-const numero = String(numeroRaw).split('@').replace(/\D/g, '');
+  const mensagemObj = dadosObj?.mensagens || dadosObj?.message || body?.message;
 
-// 🔹 Captura o TEXTO
-const textoRaw = 
-  mensagemObj?.messageBody || 
-  mensagemObj?.mensagem?.conversa || 
-  mensagemObj?.mensagem?.extendedTextMessage?.text || 
-  "";
-const texto = String(textoRaw).trim();
+  if (!mensagemObj) {
+    console.log('Webhook sem mensagens estruturadas');
+    return res.status(200).json({ ok: true });
+  }
 
-// 🔹 Prepara para o bot processar
-const mensagem = texto.toLowerCase();
+  // Captura e limpa o NÚMERO (CORRIGIDO)
+  const numeroRaw = mensagemObj?.chave?.cleanedSenderPn || mensagemObj?.chave?.senderPn || "";
+  const numeroSemArroba = String(numeroRaw).split('@')[0]; // Pega só a parte antes do @
+  const numero = numeroSemArroba.replace(/\D/g, ''); // Remove caracteres não numéricos
+
+  // Captura o TEXTO
+  const textoRaw = 
+    mensagemObj?.messageBody || 
+    mensagemObj?.mensagem?.conversa || 
+    mensagemObj?.mensagem?.extendedTextMessage?.text || 
+    "";
+  const texto = String(textoRaw).trim();
+
+  // Prepara para o bot processar
+  const mensagem = texto.toLowerCase();
 
   const cliente = estadoClientes.getEstado(numero);
   let resposta = '';
@@ -123,65 +146,64 @@ const mensagem = texto.toLowerCase();
       saudacaoTexto() +
       menuPrincipal();
     cliente.ultimaMensagem = resposta;
-   await enviarMensagemWA(numero, resposta); 
-return res.status(200).json({ ok: true });}
+    await enviarMensagemWA(numero, resposta); 
+    return res.status(200).json({ ok: true });
+  }
 
   // ===== PRIMEIRO CONTATO =====
-
-if (!cliente.recebeuSaudacao) {
-  cliente.recebeuSaudacao = true;
-  cliente.estado = 'MENU';
-  resposta = saudacaoTexto() + menuPrincipal();
-  cliente.ultimaMensagem = resposta;
-
-  await enviarMensagemWA(numero, resposta);
-
-  return res.status(200).json({ ok: true });}
-  
- // ===== CANCELAR =====
-if (mensagem === 'cancelar') {
-  cliente.estadoAnterior = cliente.estado; // <<< GUARDA ONDE ESTAVA
-  cliente.mensagemAntesDoCancelar = cliente.ultimaMensagem;
-  cliente.estado = 'CONFIRMAR_CANCELAMENTO';
-
-  resposta =
-    `⚠️ Tem certeza que deseja cancelar o pedido?\n\n` +
-    `1️⃣ Sim, cancelar\n` +
-    `2️⃣ Não, continuar`;
-
-  cliente.ultimaMensagem = resposta;
-  await enviarMensagemWA(numero, resposta); 
-return res.status(200).json({ ok: true });}
-
- if (cliente.estado === 'CONFIRMAR_CANCELAMENTO') {
-
-  // 1️⃣ CONFIRMOU CANCELAMENTO
-  if (mensagem === '1') {
-    estadoClientes.limparPedido(numero);
-
+  if (!cliente.recebeuSaudacao) {
+    cliente.recebeuSaudacao = true;
     cliente.estado = 'MENU';
+    resposta = saudacaoTexto() + menuPrincipal();
+    cliente.ultimaMensagem = resposta;
+    await enviarMensagemWA(numero, resposta);
+    return res.status(200).json({ ok: true });
+  }
+  
+  // ===== CANCELAR =====
+  if (mensagem === 'cancelar') {
+    cliente.estadoAnterior = cliente.estado;
+    cliente.mensagemAntesDoCancelar = cliente.ultimaMensagem;
+    cliente.estado = 'CONFIRMAR_CANCELAMENTO';
 
     resposta =
-      `❌ Pedido cancelado com sucesso.\n\n` +
-      menuPrincipal();
+      `⚠️ Tem certeza que deseja cancelar o pedido?\n\n` +
+      `1️⃣ Sim, cancelar\n` +
+      `2️⃣ Não, continuar`;
 
     cliente.ultimaMensagem = resposta;
-  await enviarMensagemWA(numero, resposta); 
-return res.status(200).json({ ok: true });}
+    await enviarMensagemWA(numero, resposta); 
+    return res.status(200).json({ ok: true });
+  }
 
-  // 2️⃣ NÃO QUIS CANCELAR → CONTINUA DE ONDE PAROU
-if (mensagem === '2') {
-  cliente.estado = cliente.estadoAnterior || 'MENU';
+  if (cliente.estado === 'CONFIRMAR_CANCELAMENTO') {
+    // CONFIRMOU CANCELAMENTO
+    if (mensagem === '1') {
+      estadoClientes.limparPedido(numero);
+      cliente.estado = 'MENU';
 
-  resposta = cliente.mensagemAntesDoCancelar;
-  cliente.ultimaMensagem = resposta;
+      resposta =
+        `❌ Pedido cancelado com sucesso.\n\n` +
+        menuPrincipal();
 
- await enviarMensagemWA(numero, resposta); 
-return res.status(200).json({ ok: true });}
+      cliente.ultimaMensagem = resposta;
+      await enviarMensagemWA(numero, resposta); 
+      return res.status(200).json({ ok: true });
+    }
 
-  const msgErro = erroComUltimaMensagem(cliente);
+    // NÃO QUIS CANCELAR → CONTINUA DE ONDE PAROU
+    if (mensagem === '2') {
+      cliente.estado = cliente.estadoAnterior || 'MENU';
+      resposta = cliente.mensagemAntesDoCancelar;
+      cliente.ultimaMensagem = resposta;
+      await enviarMensagemWA(numero, resposta); 
+      return res.status(200).json({ ok: true });
+    }
+
+    const msgErro = erroComUltimaMensagem(cliente);
     await enviarMensagemWA(numero, msgErro);
-    return res.status(200).json({ ok: true });}
+    return res.status(200).json({ ok: true });
+  }
 
   // ================= MENU =================
   if (cliente.estado === 'MENU') {
@@ -190,7 +212,7 @@ return res.status(200).json({ ok: true });}
       let cardapio = `🍱 *Cardápio*\n\n`;
 
       dados.forEach(item => {
-        cardapio += `• ${item.PRATO} — R$ ${item.VALOR}\n`;
+        cardapio += `• ${item.PRATO} – R$ ${item.VALOR}\n`;
       });
 
       cardapio +=
@@ -202,7 +224,8 @@ return res.status(200).json({ ok: true });}
       cliente.estado = 'CARDAPIO';
       cliente.ultimaMensagem = cardapio;
       await enviarMensagemWA(numero, cardapio);
-      return res.status(200).json({ ok: true });}
+      return res.status(200).json({ ok: true });
+    }
 
     if (mensagem === '2') {
       const dados = carregarMenu();
@@ -218,7 +241,8 @@ return res.status(200).json({ ok: true });}
       cliente.opcoesPrato = dados;
       cliente.ultimaMensagem = lista;
       await enviarMensagemWA(numero, lista);
-      return res.status(200).json({ ok: true });}
+      return res.status(200).json({ ok: true });
+    }
 
     if (mensagem === '3') {
       cliente.estado = 'ELOGIOS';
@@ -228,42 +252,46 @@ return res.status(200).json({ ok: true });}
         `0️⃣ Voltar ao menu`;
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
-return res.status(200).json({ ok: true });}
+      return res.status(200).json({ ok: true });
+    }
 
-   const msgErro = erroComUltimaMensagem(cliente);
-  await enviarMensagemWA(numero, msgErro);
-  return res.status(200).json({ ok: true });}
+    const msgErro = erroComUltimaMensagem(cliente);
+    await enviarMensagemWA(numero, msgErro);
+    return res.status(200).json({ ok: true });
+  }
 
- // ================= CARDÁPIO =================
-if (cliente.estado === 'CARDAPIO') {
+  // ================= CARDÁPIO =================
+  if (cliente.estado === 'CARDAPIO') {
+    // Voltar ao menu
+    if (mensagem === '1') {
+      cliente.estado = 'MENU';
+      const msgMenu = menuPrincipal();
+      await enviarMensagemWA(numero, msgMenu);
+      return res.status(200).json({ ok: true });
+    }
 
-  // 1️⃣ Voltar ao menu
-  if (mensagem === '1') {
-    cliente.estado = 'MENU';
-    const msgMenu = menuPrincipal();
-    await enviarMensagemWA(numero, msgMenu);
-    return res.status(200).json({ ok: true });}
+    // Fazer pedido
+    if (mensagem === '2') {
+      const dados = carregarMenu();
+      let lista = `🍽️ Escolha um prato:\n\n`;
 
-  // 2️⃣ Fazer pedido
-  if (mensagem === '2') {
-    const dados = carregarMenu();
-    let lista = `🍽️ Escolha um prato:\n\n`;
+      dados.forEach((item, i) => {
+        lista += `${i + 1}️⃣ ${item.PRATO}\n`;
+      });
 
-    dados.forEach((item, i) => {
-      lista += `${i + 1}️⃣ ${item.PRATO}\n`;
-    });
+      lista += `\n0️⃣ Voltar ao menu`;
 
-    lista += `\n0️⃣ Voltar ao menu`;
+      cliente.estado = 'ESCOLHENDO_PRATO';
+      cliente.opcoesPrato = dados;
+      cliente.ultimaMensagem = lista;
+      await enviarMensagemWA(numero, lista);
+      return res.status(200).json({ ok: true });
+    }
 
-    cliente.estado = 'ESCOLHENDO_PRATO';
-    cliente.opcoesPrato = dados;
-    cliente.ultimaMensagem = lista;
-    await enviarMensagemWA(numero, lista);
-      return res.status(200).json({ ok: true });}
-
-  const msgErro = erroComUltimaMensagem(cliente);
-  await enviarMensagemWA(numero, msgErro);
-  return res.status(200).json({ ok: true });}
+    const msgErro = erroComUltimaMensagem(cliente);
+    await enviarMensagemWA(numero, msgErro);
+    return res.status(200).json({ ok: true });
+  }
 
   // ================= ESCOLHENDO PRATO =================
   if (cliente.estado === 'ESCOLHENDO_PRATO') {
@@ -272,13 +300,15 @@ if (cliente.estado === 'CARDAPIO') {
       resposta = menuPrincipal();
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
-return res.status(200).json({ ok: true });}
+      return res.status(200).json({ ok: true });
+    }
 
     const escolha = parseInt(mensagem);
     if (isNaN(escolha) || escolha < 1 || escolha > cliente.opcoesPrato.length) {
       const msgErro = erroComUltimaMensagem(cliente);
-  await enviarMensagemWA(numero, msgErro);
-  return res.status(200).json({ ok: true });}
+      await enviarMensagemWA(numero, msgErro);
+      return res.status(200).json({ ok: true });
+    }
 
     const prato = cliente.opcoesPrato[escolha - 1];
     const nome = prato.PRATO.toLowerCase();
@@ -307,7 +337,8 @@ return res.status(200).json({ ok: true });}
 
     cliente.ultimaMensagem = resposta;
     await enviarMensagemWA(numero, resposta); 
-return res.status(200).json({ ok: true });}
+    return res.status(200).json({ ok: true });
+  }
 
   // ================= VARIAÇÃO ARROZ =================
   if (cliente.estado === 'VARIACAO_ARROZ') {
@@ -316,10 +347,10 @@ return res.status(200).json({ ok: true });}
     } else if (mensagem === '2') {
       cliente.pedido.at(-1).arroz = 'Integral';
     } else {
-      // ⚠️ Tratamento de erro precisa de chaves {}
       const msgErro = erroComUltimaMensagem(cliente);
       await enviarMensagemWA(numero, msgErro);
-      return res.status(200).json({ ok: true });}// <--- Fecha o erro aqui
+      return res.status(200).json({ ok: true });
+    }
 
     // Se chegou aqui, a escolha foi válida (1 ou 2)
     if (cliente.precisaStrogonoff) {
@@ -332,25 +363,27 @@ return res.status(200).json({ ok: true });}
 
     cliente.ultimaMensagem = resposta;
     await enviarMensagemWA(numero, resposta); 
-    return res.status(200).json({ ok: true });}
+    return res.status(200).json({ ok: true });
+  }
   
- // ================= VARIAÇÃO STROGONOFF =================
+  // ================= VARIAÇÃO STROGONOFF =================
   if (cliente.estado === 'VARIACAO_STROGONOFF') {
     if (mensagem === '1') {
       cliente.pedido.at(-1).strogonoff = 'Tradicional';
     } else if (mensagem === '2') {
       cliente.pedido.at(-1).strogonoff = 'Light';
     } else {
-      // ⚠️ Ajustado para não travar o Render
       const msgErro = erroComUltimaMensagem(cliente);
       await enviarMensagemWA(numero, msgErro);
-      return res.status(200).json({ ok: true });}
+      return res.status(200).json({ ok: true });
+    }
 
     cliente.estado = 'QUANTIDADE';
     resposta = `Digite a quantidade desejada.`;
     cliente.ultimaMensagem = resposta;
     await enviarMensagemWA(numero, resposta); 
-    return res.status(200).json({ ok: true });}
+    return res.status(200).json({ ok: true });
+  }
 
   // ================= QUANTIDADE =================
   if (cliente.estado === 'QUANTIDADE') {
@@ -358,7 +391,8 @@ return res.status(200).json({ ok: true });}
     if (isNaN(qtd) || qtd < 1) {
       const msgErro = erroComUltimaMensagem(cliente);
       await enviarMensagemWA(numero, msgErro);
-      return res.status(200).json({ ok: true });}// <--- CHAVE DE FECHAMENTO QUE FALTAVA AQUI!
+      return res.status(200).json({ ok: true });
+    }
 
     cliente.pedido.at(-1).quantidade = qtd;
     cliente.estado = 'ADICIONAR_OUTRO';
@@ -368,9 +402,10 @@ return res.status(200).json({ ok: true });}
       `2️⃣ Não`;
     cliente.ultimaMensagem = resposta;
     await enviarMensagemWA(numero, resposta); 
-    return res.status(200).json({ ok: true });}
+    return res.status(200).json({ ok: true });
+  }
   
- // ================= ADICIONAR OUTRO =================
+  // ================= ADICIONAR OUTRO =================
   if (cliente.estado === 'ADICIONAR_OUTRO') {
     if (mensagem === '1') {
       cliente.estado = 'ESCOLHENDO_PRATO';
@@ -384,7 +419,8 @@ return res.status(200).json({ ok: true });}
       cliente.opcoesPrato = dados;
       cliente.ultimaMensagem = lista;
       await enviarMensagemWA(numero, lista);
-      return res.status(200).json({ ok: true });}// <--- FECHEI A OPÇÃO 1 AQUI
+      return res.status(200).json({ ok: true });
+    }
 
     if (mensagem === '2') {
       const totalMarmitas = cliente.pedido.reduce(
@@ -400,7 +436,7 @@ return res.status(200).json({ ok: true });}
         textoPromocao =
           `🎉 *Parabéns! Promoção aplicada!*\n\n` +
           `🔥 A partir de *5 marmitas*, o valor unitário cai de\n` +
-          `~~R$ 19,99~~ *R$ 17,49 por unidade*\n\n`;
+          `~~R$ 19,99~~ para *R$ 17,49 por unidade*\n\n`;
       }
 
       const subtotal = (totalMarmitas * valorUnitario).toFixed(2);
@@ -414,11 +450,13 @@ return res.status(200).json({ ok: true });}
 
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
-      return res.status(200).json({ ok: true });} // <--- FECHEI A OPÇÃO 2 AQUI
+      return res.status(200).json({ ok: true });
+    }
 
     const msgErro = erroComUltimaMensagem(cliente);
     await enviarMensagemWA(numero, msgErro);
-    return res.status(200).json({ ok: true });}// <--- FECHEI O ESTADO ADICIONAR_OUTRO AQUI
+    return res.status(200).json({ ok: true });
+  }
 
   // ================= ENDEREÇO =================
   if (cliente.estado === 'AGUARDANDO_ENDERECO') {
@@ -428,14 +466,39 @@ return res.status(200).json({ ok: true });}
       `✅ Endereço recebido.\n` +
       `Aguarde enquanto calculamos o frete.`;
     cliente.ultimaMensagem = resposta;
-   await enviarMensagemWA(numero, resposta); 
-return res.status(200).json({ ok: true });}
+    await enviarMensagemWA(numero, resposta); 
+    return res.status(200).json({ ok: true });
+  }
+
+  // ================= ELOGIOS =================
+  if (cliente.estado === 'ELOGIOS') {
+    if (mensagem === '0') {
+      cliente.estado = 'MENU';
+      resposta = menuPrincipal();
+      cliente.ultimaMensagem = resposta;
+      await enviarMensagemWA(numero, resposta);
+      return res.status(200).json({ ok: true });
+    }
+
+    // Recebe o feedback do cliente
+    console.log(`Feedback recebido de ${numero}: ${texto}`);
+    
+    cliente.estado = 'MENU';
+    resposta =
+      `✅ Obrigado pelo seu feedback!\n` +
+      `Sua mensagem é muito importante para nós. 🙏\n\n` +
+      menuPrincipal();
+    
+    cliente.ultimaMensagem = resposta;
+    await enviarMensagemWA(numero, resposta);
+    return res.status(200).json({ ok: true });
+  }
 
   // ================= FALLBACK =================
   estadoClientes.limparPedido(numero);
   resposta = saudacaoTexto() + menuPrincipal();
- await enviarMensagemWA(numero, resposta); 
-return res.status(200).json({ ok: true });
+  await enviarMensagemWA(numero, resposta); 
+  return res.status(200).json({ ok: true });
 });
 
 app.listen(PORT, () => {
