@@ -119,8 +119,7 @@ const mensagemObj = dadosObj?.mensagens || dadosObj?.message || body?.message;
 
 if (!mensagemObj) {
   console.log('Webhook sem mensagens estruturadas');
-  return res.status(200).json({ ok: true });
-}
+  return res.status(200).json({ ok: true });}
 
 // 🔹 Captura e limpa o NÚMERO (Pega o que vem antes do @ e limpa)
 const numeroRaw = mensagemObj?.chave?.cleanedSenderPn || mensagemObj?.chave?.senderPn || "";
@@ -151,8 +150,7 @@ const mensagem = texto.toLowerCase();
       menuPrincipal();
     cliente.ultimaMensagem = resposta;
    await enviarMensagemWA(numero, resposta); 
-return res.status(200).json({ ok: true });
-  }
+return res.status(200).json({ ok: true });}
 
   // ===== PRIMEIRO CONTATO =====
 
@@ -164,8 +162,7 @@ if (!cliente.recebeuSaudacao) {
 
   await enviarMensagemWA(numero, resposta);
 
-  return res.status(200).json({ ok: true });
-}
+  return res.status(200).json({ ok: true });}
   
  // ===== CANCELAR =====
 if (mensagem === 'cancelar') {
@@ -180,8 +177,7 @@ if (mensagem === 'cancelar') {
 
   cliente.ultimaMensagem = resposta;
   await enviarMensagemWA(numero, resposta); 
-return res.status(200).json({ ok: true });
-}
+return res.status(200).json({ ok: true });}
 
  if (cliente.estado === 'CONFIRMAR_CANCELAMENTO') {
 
@@ -197,8 +193,7 @@ return res.status(200).json({ ok: true });
 
     cliente.ultimaMensagem = resposta;
   await enviarMensagemWA(numero, resposta); 
-return res.status(200).json({ ok: true });
-  }
+return res.status(200).json({ ok: true });}
 
   // 2️⃣ NÃO QUIS CANCELAR → CONTINUA DE ONDE PAROU
 if (mensagem === '2') {
@@ -208,13 +203,11 @@ if (mensagem === '2') {
   cliente.ultimaMensagem = resposta;
 
  await enviarMensagemWA(numero, resposta); 
-return res.status(200).json({ ok: true });
-}
+return res.status(200).json({ ok: true });}
 
   const msgErro = erroComUltimaMensagem(cliente);
     await enviarMensagemWA(numero, msgErro);
-    return res.status(200).json({ ok: true });
- }
+    return res.status(200).json({ ok: true });}
 
   // ================= MENU =================
   if (cliente.estado === 'MENU') {
@@ -235,8 +228,7 @@ return res.status(200).json({ ok: true });
       cliente.estado = 'CARDAPIO';
       cliente.ultimaMensagem = cardapio;
       await enviarMensagemWA(numero, cardapio);
-      return res.status(200).json({ ok: true });
-    }
+      return res.status(200).json({ ok: true });}
 
     if (mensagem === '2') {
       const dados = carregarMenu();
@@ -252,8 +244,7 @@ return res.status(200).json({ ok: true });
       cliente.opcoesPrato = dados;
       cliente.ultimaMensagem = lista;
       await enviarMensagemWA(numero, lista);
-      return res.status(200).json({ ok: true });
-    }
+      return res.status(200).json({ ok: true });}
 
     if (mensagem === '3') {
       cliente.estado = 'ELOGIOS';
@@ -263,13 +254,11 @@ return res.status(200).json({ ok: true });
         `0️⃣ Voltar ao menu`;
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
-return res.status(200).json({ ok: true });
-    }
+return res.status(200).json({ ok: true });}
 
    const msgErro = erroComUltimaMensagem(cliente);
   await enviarMensagemWA(numero, msgErro);
-  return res.status(200).json({ ok: true });
-  }
+  return res.status(200).json({ ok: true });}
 
  // ================= CARDÁPIO =================
 if (cliente.estado === 'CARDAPIO') {
@@ -279,8 +268,7 @@ if (cliente.estado === 'CARDAPIO') {
     cliente.estado = 'MENU';
     const msgMenu = menuPrincipal();
     await enviarMensagemWA(numero, msgMenu);
-    return res.status(200).json({ ok: true });
-  }
+    return res.status(200).json({ ok: true });}
 
   // 2️⃣ Fazer pedido
   if (mensagem === '2') {
@@ -297,13 +285,11 @@ if (cliente.estado === 'CARDAPIO') {
     cliente.opcoesPrato = dados;
     cliente.ultimaMensagem = lista;
     await enviarMensagemWA(numero, lista);
-      return res.status(200).json({ ok: true });
-  }
+      return res.status(200).json({ ok: true });}
 
   const msgErro = erroComUltimaMensagem(cliente);
   await enviarMensagemWA(numero, msgErro);
-  return res.status(200).json({ ok: true });
-}
+  return res.status(200).json({ ok: true });}
 
   // ================= ESCOLHENDO PRATO =================
   if (cliente.estado === 'ESCOLHENDO_PRATO') {
@@ -312,15 +298,13 @@ if (cliente.estado === 'CARDAPIO') {
       resposta = menuPrincipal();
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
-return res.status(200).json({ ok: true });
-    }
+return res.status(200).json({ ok: true });}
 
     const escolha = parseInt(mensagem);
     if (isNaN(escolha) || escolha < 1 || escolha > cliente.opcoesPrato.length) {
       const msgErro = erroComUltimaMensagem(cliente);
   await enviarMensagemWA(numero, msgErro);
-  return res.status(200).json({ ok: true });
-    }
+  return res.status(200).json({ ok: true });}
 
     const prato = cliente.opcoesPrato[escolha - 1];
     const nome = prato.PRATO.toLowerCase();
@@ -349,8 +333,7 @@ return res.status(200).json({ ok: true });
 
     cliente.ultimaMensagem = resposta;
     await enviarMensagemWA(numero, resposta); 
-return res.status(200).json({ ok: true });
-  }
+return res.status(200).json({ ok: true });}
 
   // ================= VARIAÇÃO ARROZ =================
   if (cliente.estado === 'VARIACAO_ARROZ') {
@@ -362,8 +345,7 @@ return res.status(200).json({ ok: true });
       // ⚠️ Tratamento de erro precisa de chaves {}
       const msgErro = erroComUltimaMensagem(cliente);
       await enviarMensagemWA(numero, msgErro);
-      return res.status(200).json({ ok: true });
-    } // <--- Fecha o erro aqui
+      return res.status(200).json({ ok: true });}// <--- Fecha o erro aqui
 
     // Se chegou aqui, a escolha foi válida (1 ou 2)
     if (cliente.precisaStrogonoff) {
@@ -376,8 +358,7 @@ return res.status(200).json({ ok: true });
 
     cliente.ultimaMensagem = resposta;
     await enviarMensagemWA(numero, resposta); 
-    return res.status(200).json({ ok: true });
-  }
+    return res.status(200).json({ ok: true });}
   
  // ================= VARIAÇÃO STROGONOFF =================
   if (cliente.estado === 'VARIACAO_STROGONOFF') {
@@ -389,15 +370,13 @@ return res.status(200).json({ ok: true });
       // ⚠️ Ajustado para não travar o Render
       const msgErro = erroComUltimaMensagem(cliente);
       await enviarMensagemWA(numero, msgErro);
-      return res.status(200).json({ ok: true });
-    }
+      return res.status(200).json({ ok: true });}
 
     cliente.estado = 'QUANTIDADE';
     resposta = `Digite a quantidade desejada.`;
     cliente.ultimaMensagem = resposta;
     await enviarMensagemWA(numero, resposta); 
-    return res.status(200).json({ ok: true });
-  }
+    return res.status(200).json({ ok: true });}
 
   // ================= QUANTIDADE =================
   if (cliente.estado === 'QUANTIDADE') {
@@ -405,8 +384,7 @@ return res.status(200).json({ ok: true });
     if (isNaN(qtd) || qtd < 1) {
       const msgErro = erroComUltimaMensagem(cliente);
       await enviarMensagemWA(numero, msgErro);
-      return res.status(200).json({ ok: true });
-    } // <--- CHAVE DE FECHAMENTO QUE FALTAVA AQUI!
+      return res.status(200).json({ ok: true });}// <--- CHAVE DE FECHAMENTO QUE FALTAVA AQUI!
 
     cliente.pedido.at(-1).quantidade = qtd;
     cliente.estado = 'ADICIONAR_OUTRO';
@@ -416,8 +394,7 @@ return res.status(200).json({ ok: true });
       `2️⃣ Não`;
     cliente.ultimaMensagem = resposta;
     await enviarMensagemWA(numero, resposta); 
-    return res.status(200).json({ ok: true });
-  }
+    return res.status(200).json({ ok: true });}
   
  // ================= ADICIONAR OUTRO =================
   if (cliente.estado === 'ADICIONAR_OUTRO') {
@@ -433,8 +410,7 @@ return res.status(200).json({ ok: true });
       cliente.opcoesPrato = dados;
       cliente.ultimaMensagem = lista;
       await enviarMensagemWA(numero, lista);
-      return res.status(200).json({ ok: true });
-    } // <--- FECHEI A OPÇÃO 1 AQUI
+      return res.status(200).json({ ok: true });}// <--- FECHEI A OPÇÃO 1 AQUI
 
     if (mensagem === '2') {
       const totalMarmitas = cliente.pedido.reduce(
@@ -464,13 +440,11 @@ return res.status(200).json({ ok: true });
 
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
-      return res.status(200).json({ ok: true });
-    } // <--- FECHEI A OPÇÃO 2 AQUI
+      return res.status(200).json({ ok: true });} // <--- FECHEI A OPÇÃO 2 AQUI
 
     const msgErro = erroComUltimaMensagem(cliente);
     await enviarMensagemWA(numero, msgErro);
-    return res.status(200).json({ ok: true });
-  } // <--- FECHEI O ESTADO ADICIONAR_OUTRO AQUI
+    return res.status(200).json({ ok: true });}// <--- FECHEI O ESTADO ADICIONAR_OUTRO AQUI
 
   // ================= ENDEREÇO =================
   if (cliente.estado === 'AGUARDANDO_ENDERECO') {
@@ -481,8 +455,7 @@ return res.status(200).json({ ok: true });
       `Aguarde enquanto calculamos o frete.`;
     cliente.ultimaMensagem = resposta;
    await enviarMensagemWA(numero, resposta); 
-return res.status(200).json({ ok: true });
-  }
+return res.status(200).json({ ok: true });}
 
   // ================= FALLBACK =================
   estadoClientes.limparPedido(numero);
