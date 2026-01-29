@@ -16,12 +16,12 @@ app.use(express.urlencoded({ extended: true }));
 // ==============================================================================
 
 const NUMERO_ADMIN = '5551984050946'; 
-const MP_ACCESS_TOKEN = 'APP_USR-SEU-TOKEN-GIGANTE-AQUI'; // <--- COLOQUE SEU TOKEN AQUI
-const WASENDER_TOKEN = process.env.WASENDER_TOKEN || 'SUA_CHAVE_WASENDER_AQUI'; 
+const MP_ACCESS_TOKEN = 'APP_USR-3976540518966482-012110-64c2873d7929c168846b389d4f6c311e-281673709'; // <--- COLOQUE SEU TOKEN AQUI
+const WASENDER_TOKEN = process.env.WASENDER_TOKEN || '399f73920f6d3300e39fc9f8f0e34eb40510a8a14847e288580d5d10e40cdae4'; 
 
 // ⚠️ IMPORTANTE: Coloque aqui o link do seu Render (sem barra no final)
 // Isso serve para o Mercado Pago saber onde avisar que o dinheiro caiu.
-const URL_DO_SEU_SITE = 'https://SEU-APP.onrender.com'; 
+const URL_DO_SEU_SITE = 'https://mmmelhormarmita.onrender.com'; 
 
 // ==============================================================================
 
