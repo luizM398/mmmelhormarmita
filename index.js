@@ -82,40 +82,94 @@ function iniciarTimerInatividade(numero) {
 }
 
 // --- CÁLCULO DE FRETE (Corrigido Acentos) ---
+// --- CÁLCULO DE FRETE INTELIGENTE (Versão 2.0) ---
 function calcularFrete(textoEndereco) {
-  const endereco = textoEndereco.toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, ""); // Remove acentos para facilitar a busca (hipica = hípica)
+  // 1. LIMPEZA PROFUNDA
+  // Remove acentos, deixa minúsculo e remove caracteres especiais
+  const enderecoLimpo = textoEndereco.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, "") // Tira acentos (é -> e)
+    .replace(/[^a-z0-9\s]/g, ""); // Tira simbolos (traços, pontos)
 
-  // 1. ZONA LOCAL - R$ 8,00
-  const zonaLocal = ['lomba do pinheiro', 'agronomia', 'parada', 'pda', 'joao de oliveira', 'sao pedro'];
-  if (zonaLocal.some(bairro => endereco.includes(bairro))) {
-    return { valor: 8.00, texto: "R$ 8,00" };
-  }
+  // Função auxiliar para verificar se ALGUMA palavra da lista está no texto
+  const contem = (lista) => lista.some(termo => enderecoLimpo.includes(termo));
 
-  // 2. ZONA ALVO - R$ 20,00
-  const zonaAlvo = ['bela vista', 'moinhos', 'mont serrat', 'auxiliadora', 'rio branco', 'petropolis', 'tres figueiras', 'chacara das pedras'];
-  if (zonaAlvo.some(bairro => endereco.includes(bairro))) {
-    return { valor: 20.00, texto: "R$ 20,00" };
-  }
-
-  // 3. ZONA INTERMEDIÁRIA - R$ 15,00
-  const zonaMedia = [
-    'restinga', 'partenon', 'bento', 'intercap', 'jardim botanico', 
-    'santana', 'sao jose', 'santa maria'
-  ];
-  if (zonaMedia.some(bairro => endereco.includes(bairro))) {
-    return { valor: 15.00, texto: "R$ 15,00" };
-  }
-
-  // 4. ZONA BLOQUEADA (Adicionado versões sem acento)
+  // ============================================================
+  // 🚫 1. PRIMEIRO: VERIFICA ZONA BLOQUEADA (Segurança)
+  // ============================================================
+  // Verifica variações de bairros distantes
   const zonaBloqueada = [
     'hipica', 'belem novo', 'lami', 'sarandi', 'humaita', 'navegantes', 
-    'centro historico', 'rubem berta', 'centro', 'viamao'
+    'centro historico', 'rubem berta', 'ruben berta', 'rubens berta', // Variações de Rubem
+    'centro', 'viamao', 'viamo', 'restinga nova', 'restinga velha', 
+    'ponta grossa', 'belem velho', 'chapreu do sol', 'lageado'
   ];
-  if (zonaBloqueada.some(bairro => endereco.includes(bairro))) {
-    return { erro: true, msg: "🚫 Desculpe, ainda não realizamos entregas nesta região (muito distante da nossa cozinha)." };
+
+  if (contem(zonaBloqueada)) {
+    // Exceção: Se for "Restinga", vamos deixar passar na zona média (regra abaixo)
+    // Mas se for "Restinga Nova/Velha" especifico longe, bloqueia.
+    // (Ajuste fino conforme sua necessidade)
+    if (!enderecoLimpo.includes('restinga')) {
+       return { erro: true, msg: "🚫 Desculpe, ainda não realizamos entregas nesta região (muito distante da nossa cozinha)." };
+    }
   }
 
+  // ============================================================
+  // 🟢 2. ZONA LOCAL (Perto) - R$ 8,00
+  // ============================================================
+  const zonaLocal = [
+    'lomba do pinheiro', 'lomba pinheiro', 'lomba', 
+    'agronomia', 
+    'parada', 'pda', // Abreviações
+    'joao de oliveira', 'j oliveira', 'joao oliveira',
+    'sao pedro', 's pedro', 'vilela', 'mapa', 'bonsucesso'
+  ];
+  
+  if (contem(zonaLocal)) {
+    return { valor: 8.00, texto: "R$ 8,00 (Entrega Local)" };
+  }
+
+  // ============================================================
+  // 💎 3. ZONA ALVO (Bairros Nobres) - R$ 20,00
+  // ============================================================
+  const zonaAlvo = [
+    'bela vista', 'belavista', 'b vista', 'b. vista',
+    'moinhos', 'muinhos', 'moinho', // Erros comuns
+    'mont serrat', 'montserrat', 'mon serrat',
+    'auxiliadora', 
+    'rio branco', 'r branco', 
+    'petropolis', 'petropoles', 
+    'tres figueiras', '3 figueiras',
+    'chacara das pedras', 'chacara pedras'
+  ];
+
+  if (contem(zonaAlvo)) {
+    return { valor: 20.00, texto: "R$ 20,00 (Entrega Especial)" };
+  }
+
+  // ============================================================
+  // 🟡 4. ZONA INTERMEDIÁRIA (Caminho/Regional) - R$ 15,00
+  // ============================================================
+  const zonaMedia = [
+    'restinga', // Agora restinga cai aqui
+    'partenon', 'parthenon', 'partenom',
+    'bento', 'bento goncalves', 
+    'intercap', 
+    'jardim botanico', 'j botanico', 'jd botanico',
+    'santana', 'stana',
+    'sao jose', 's jose', 's. jose', 'sao ze', // Variações São José
+    'santa maria', 'sta maria', 'sta. maria', // Variações Santa Maria
+    'ipiranga', 'jardim carvalho', 'jd carvalho'
+  ];
+
+  if (contem(zonaMedia)) {
+    return { valor: 15.00, texto: "R$ 15,00 (Entrega Regional)" };
+  }
+
+  // ============================================================
+  // ❓ 5. NÃO IDENTIFICADO
+  // ============================================================
+  return null; 
+}
   // 5. NÃO IDENTIFICADO
   return null; 
 }
