@@ -12,6 +12,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 const TEMPO_INATIVO = 10 * 60 * 1000; // 10 minutos
+const NUMERO_ADMIN = '5551984050946';
 
 // ================= FUNÇÕES AUXILIARES =================
 
