@@ -12,15 +12,19 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ==============================================================================
-// ⚙️ CONFIGURAÇÕES (PREENCHA AQUI!)
+// ⚙️ ÁREA DE CONFIGURAÇÃO (PREENCHA AQUI!)
 // ==============================================================================
 
 const NUMERO_ADMIN = '5551984050946'; 
-const MP_ACCESS_TOKEN = 'APP_USR-SEU-TOKEN-GIGANTE-AQUI'; // <--- SEU TOKEN DO MERCADO PAGO
-const WASENDER_TOKEN = process.env.WASENDER_TOKEN || 'SUA_CHAVE_WASENDER_AQUI'; // <--- SEU TOKEN WASENDER
 
-// ⚠️ IMPORTANTE: Coloque aqui o link do seu Render (sem barra no final)
-// Exemplo: https://bot-marmita.onrender.com
+// 1. SEU TOKEN DO MERCADO PAGO
+const MP_ACCESS_TOKEN = 'APP_USR-SEU-TOKEN-GIGANTE-AQUI'; 
+
+// 2. SEU TOKEN DO WASENDER
+const WASENDER_TOKEN = process.env.WASENDER_TOKEN || 'SUA_CHAVE_WASENDER_AQUI'; 
+
+// 3. SEU LINK DO RENDER (Importante para o Comprovante Automático)
+// Exemplo: https://marmita-bot.onrender.com (SEM BARRA NO FINAL)
 const URL_DO_SEU_SITE = 'https://SEU-APP.onrender.com'; 
 
 // ==============================================================================
@@ -28,27 +32,31 @@ const URL_DO_SEU_SITE = 'https://SEU-APP.onrender.com';
 const TEMPO_INATIVO = 10 * 60 * 1000; 
 const timersClientes = {};
 
+// Inicializa Mercado Pago
 const client = new MercadoPagoConfig({ accessToken: MP_ACCESS_TOKEN, options: { timeout: 5000 } });
 
 // ==============================================================================
-// 💰 FUNÇÕES DE PAGAMENTO
+// 💰 FUNÇÕES DE PAGAMENTO (BLINDADAS CONTRA ERRO 403)
 // ==============================================================================
 
 async function gerarPix(valor, clienteNome, clienteTelefone) {
   try {
     const payment = new Payment(client);
-    const emailCliente = `cliente${clienteTelefone}@marmita.com`;
+    
+    // TRUQUE ANTI-BLOQUEIO: E-mail único a cada pedido
+    const emailAleatorio = `comprador.marmita.${Date.now()}@gmail.com`;
+    const telefoneLimpo = String(clienteTelefone).replace(/\D/g, '');
 
     const body = {
       transaction_amount: parseFloat(valor.toFixed(2)),
       description: 'Pedido Marmita Delivery',
       payment_method_id: 'pix',
       notification_url: `${URL_DO_SEU_SITE}/webhook`, 
-      external_reference: String(clienteTelefone), 
+      external_reference: telefoneLimpo, 
       payer: {
-        email: emailCliente,
-        first_name: clienteNome || 'Cliente',
-        last_name: clienteTelefone || 'WhatsApp'
+        email: emailAleatorio, 
+        first_name: 'Comprador',
+        last_name: 'Marmita' 
       }
     };
 
@@ -57,8 +65,9 @@ async function gerarPix(valor, clienteNome, clienteTelefone) {
       copiaCola: response.point_of_interaction.transaction_data.qr_code,
       idPagamento: response.id
     };
+
   } catch (error) {
-    console.error('Erro ao gerar PIX:', error);
+    console.error('❌ ERRO PIX:', JSON.stringify(error, null, 2));
     return null;
   }
 }
@@ -66,6 +75,11 @@ async function gerarPix(valor, clienteNome, clienteTelefone) {
 async function gerarLinkPagamento(itens, frete, clienteTelefone) {
   try {
     const preference = new Preference(client);
+    
+    // TRUQUE ANTI-BLOQUEIO TAMBÉM NO LINK
+    const emailAleatorio = `comprador.marmita.${Date.now()}@gmail.com`;
+    const telefoneLimpo = String(clienteTelefone).replace(/\D/g, '');
+
     const itemsPreference = itens.map(item => ({
       title: `(TESTE) ${item.prato}`,
       quantity: item.quantidade,
@@ -85,7 +99,12 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
     const body = {
       items: itemsPreference,
       notification_url: `${URL_DO_SEU_SITE}/webhook`,
-      external_reference: String(clienteTelefone),
+      external_reference: telefoneLimpo,
+      payer: {
+          email: emailAleatorio,
+          name: "Comprador",
+          surname: "Marmita"
+      },
       back_urls: {
         success: 'https://www.google.com', 
         failure: 'https://www.google.com',
@@ -97,13 +116,13 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
     const response = await preference.create({ body });
     return response.init_point;
   } catch (error) {
-    console.error('Erro ao gerar Link:', error);
+    console.error('❌ ERRO LINK:', error);
     return null;
   }
 }
 
 // ==============================================================================
-// 🔔 WEBHOOK (Onde o Mercado Pago avisa que pagou)
+// 🔔 WEBHOOK (O Robô que avisa que pagou)
 // ==============================================================================
 
 app.post('/webhook', async (req, res) => {
@@ -114,32 +133,27 @@ app.post('/webhook', async (req, res) => {
        const payment = new Payment(client);
        const pagamentoInfo = await payment.get({ id: data.id });
        
-       const status = pagamentoInfo.status;
-       const numeroCliente = pagamentoInfo.external_reference; 
-       const valorPago = pagamentoInfo.transaction_amount;
-       const dataPagamento = new Date().toLocaleString('pt-BR');
-       const idTransacao = pagamentoInfo.id;
-
-       // Evita duplicidade simples checando se já está aprovado
-       if (status === 'approved') {
+       if (pagamentoInfo.status === 'approved') {
+         const numeroCliente = pagamentoInfo.external_reference; 
+         const valorPago = pagamentoInfo.transaction_amount;
+         const idTransacao = pagamentoInfo.id;
+         
          console.log(`✅ Pagamento Aprovado! Cliente: ${numeroCliente}`);
          
          const comprovante = 
            `🧾 *COMPROVANTE DE PAGAMENTO*\n` +
            `--------------------------------\n` +
            `✅ *Status:* APROVADO\n` +
-           `📅 *Data:* ${dataPagamento}\n` +
            `💰 *Valor:* R$ ${valorPago.toFixed(2)}\n` +
-           `🆔 *Transação:* ${idTransacao}\n` +
+           `🆔 *ID:* ${idTransacao}\n` +
            `--------------------------------\n` +
-           `Pedido Confirmado! Já estamos preparando tudo por aqui.\n` +
-           `Qualquer dúvida, é só chamar! 😋`;
+           `Pedido Confirmado! Já vamos preparar. 😋`;
 
          await enviarMensagemWA(numeroCliente, comprovante);
-         await enviarMensagemWA(NUMERO_ADMIN, `🔔 *PAGAMENTO CONFIRMADO!*\nO cliente ${numeroCliente} pagou R$ ${valorPago}. Pode preparar!`);
+         await enviarMensagemWA(NUMERO_ADMIN, `🔔 *PAGAMENTO CONFIRMADO!*\nCliente: ${numeroCliente}\nValor: R$ ${valorPago}`);
        }
      } catch (error) {
-       console.error("Erro no Webhook:", error);
+       console.error("Erro Webhook:", error);
      }
   }
   res.status(200).send('OK');
@@ -214,10 +228,10 @@ async function enviarMensagemWA(numero, texto) {
 }
 
 // ==============================================================================
-// 🚀 ROTAS E FLUXO PRINCIPAL
+// 🚀 ROTAS
 // ==============================================================================
 
-app.get('/', (req, res) => { res.send('🤖 Bot Marmita V6.1 (Online Only) ON 🚀'); });
+app.get('/', (req, res) => { res.send('🤖 Bot Marmita V7.1 (Promo Fix + Anti-Block) ON 🚀'); });
 
 app.post('/mensagem', async (req, res) => {
   try {
@@ -267,7 +281,7 @@ app.post('/mensagem', async (req, res) => {
       if (mensagem === '1') { 
         const dados = carregarMenu();
         if(dados.length === 0) { await enviarMensagemWA(numero, "⚠️ Cardápio off."); return res.status(200).json({ok:true}); }
-        let cardapio = `🍱 *Cardápio* (TESTE ONLINE)\n\n`;
+        let cardapio = `🍱 *Cardápio* (TESTE)\n\n`;
         dados.forEach(item => { cardapio += `🔹 ${item.PRATO} – R$ 0,05\n`; });
         cardapio += `\n2️⃣ Fazer Pedido\n0️⃣ Voltar`;
         cliente.estado = 'VENDO_CARDAPIO';
@@ -296,7 +310,7 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    // 4. LEITURA DE CARDÁPIO
+    // 4. LEITURA
     if (cliente.estado === 'VENDO_CARDAPIO') {
        if (mensagem === '2') {
          const dados = carregarMenu();
@@ -317,7 +331,7 @@ app.post('/mensagem', async (req, res) => {
        return res.status(200).json({ ok: true });
     }
 
-    // 5. ESCOLHA DE PRATO
+    // 5. PEDIDO
     if (cliente.estado === 'ESCOLHENDO_PRATO') {
       if (mensagem === '0') { cliente.estado = 'MENU'; await enviarMensagemWA(numero, menuPrincipal()); return res.status(200).json({ ok: true }); }
       const escolha = parseInt(mensagem);
@@ -398,11 +412,23 @@ app.post('/mensagem', async (req, res) => {
       }
       if (mensagem === '2') {
         const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
-        const valorUnitario = totalMarmitas >= 5 ? 0.01 : 0.05;
+        
+        // --- 🛑 AQUI ESTAVA FALTANDO A LÓGICA DE AVISO DA PROMOÇÃO! ---
+        let valorUnitario = 0.05;
+        let textoPreco = "R$ 0,05/un (Teste)";
+        let msgPromo = "";
+
+        if (totalMarmitas >= 5) {
+          valorUnitario = 0.01;
+          textoPreco = "~R$ 0,05~ por *R$ 0,01* (Teste)";
+          msgPromo = "🎉 *PARABÉNS! PROMOÇÃO APLICADA!* (Acima de 5 un)\n";
+        }
+        // ----------------------------------------------------------------
+
         const subtotal = (totalMarmitas * valorUnitario).toFixed(2);
         
         cliente.estado = 'AGUARDANDO_ENDERECO';
-        resposta = `🥡 *Resumo:*\n${totalMarmitas} marmitas\n💰 Subtotal: R$ ${subtotal}\n\n📍 Digite seu *ENDEREÇO COMPLETO*:`;
+        resposta = `${msgPromo}🥡 *Resumo:*\n${totalMarmitas} marmitas\nValor: ${textoPreco}\n💰 Subtotal: R$ ${subtotal}\n\n📍 Digite seu *ENDEREÇO COMPLETO*:`;
         cliente.ultimaMensagem = resposta;
         await enviarMensagemWA(numero, resposta); 
         return res.status(200).json({ ok: true });
@@ -461,7 +487,7 @@ app.post('/mensagem', async (req, res) => {
              await enviarMensagemWA(numero, "⚠️ Erro no banco. Tente novamente.");
          }
       } 
-      // OPÇÃO 2: CARTÃO (Agora é a opção 2!)
+      // OPÇÃO 2: CARTÃO
       else if (mensagem === '2' || mensagem.includes('cartao') || mensagem.includes('cartão')) {
          await enviarMensagemWA(numero, "💳 *Gerando Link...*");
          const link = await gerarLinkPagamento(cliente.pedido, cliente.valorFrete, numero);
