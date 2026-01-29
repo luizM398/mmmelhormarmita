@@ -12,7 +12,9 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 const TEMPO_INATIVO = 10 * 60 * 1000; // 10 minutos
-const NUMERO_ADMIN = '5551984050946';
+
+// ⚠️⚠️ COLOQUE SEU NÚMERO AQUI (Com 55 e DDD) ⚠️⚠️
+const NUMERO_ADMIN = '5551999999999'; 
 
 // ================= FUNÇÕES AUXILIARES =================
 
@@ -56,6 +58,42 @@ function erroComUltimaMensagem(cliente) {
     `Por favor, digite apenas o número da opção.\n\n` +
     (cliente.ultimaMensagem || menuPrincipal())
   );
+}
+
+// --- NOVA FUNÇÃO DE FRETE (Com São José e Santa Maria) ---
+function calcularFrete(textoEndereco) {
+  const endereco = textoEndereco.toLowerCase();
+
+  // 1. ZONA LOCAL (Perto) - R$ 8,00
+  const zonaLocal = ['lomba do pinheiro', 'agronomia', 'parada', 'pda', 'joão de oliveira', 'são pedro'];
+  if (zonaLocal.some(bairro => endereco.includes(bairro))) {
+    return { valor: 8.00, texto: "R$ 8,00 (Entrega Local)" };
+  }
+
+  // 2. ZONA ALVO (Bairros Nobres) - R$ 20,00
+  const zonaAlvo = ['bela vista', 'moinhos', 'mont serrat', 'auxiliadora', 'rio branco', 'petropolis', 'petrópolis', 'três figueiras', 'chácara das pedras'];
+  if (zonaAlvo.some(bairro => endereco.includes(bairro))) {
+    return { valor: 20.00, texto: "R$ 20,00 (Entrega Especial)" };
+  }
+
+  // 3. ZONA INTERMEDIÁRIA (Caminho/Regional) - R$ 15,00
+  // Adicionados: São José, Santa Maria
+  const zonaMedia = [
+    'restinga', 'partenon', 'bento', 'intercap', 'jardim botânico', 'jardim botanico', 
+    'santana', 'viamão', 'viamao', 'são josé', 'sao jose', 'santa maria'
+  ];
+  if (zonaMedia.some(bairro => endereco.includes(bairro))) {
+    return { valor: 15.00, texto: "R$ 15,00 (Entrega Regional)" };
+  }
+
+  // 4. ZONA BLOQUEADA (Muito Longe)
+  const zonaBloqueada = ['hípica', 'belém novo', 'lami', 'sarandi', 'humaitá', 'navegantes', 'centro histórico', 'rubem berta', 'centro'];
+  if (zonaBloqueada.some(bairro => endereco.includes(bairro))) {
+    return { erro: true, msg: "🚫 Desculpe, ainda não realizamos entregas nesta região (muito distante da nossa cozinha)." };
+  }
+
+  // 5. NÃO IDENTIFICADO
+  return null; 
 }
 
 // Função para enviar MENSAGEM DE TEXTO
@@ -201,7 +239,6 @@ app.post('/mensagem', async (req, res) => {
         
         cardapio += `\nPara fazer seu pedido, digite *2*.\nOu digite *0* para voltar.`;
         
-        // Mantemos no menu para ele poder navegar
         await enviarMensagemWA(numero, cardapio);
         return res.status(200).json({ ok: true });
       }
@@ -237,7 +274,6 @@ app.post('/mensagem', async (req, res) => {
          return res.status(200).json({ ok: true });
       }
 
-      // Se digitou algo inválido
       await enviarMensagemWA(numero, `🤷‍♂️ Opção inválida.\n\n` + menuPrincipal());
       return res.status(200).json({ ok: true });
     }
@@ -359,7 +395,7 @@ app.post('/mensagem', async (req, res) => {
       }
 
       if (mensagem === '2' || mensagem.includes('nao') || mensagem.includes('não')) {
-        // CÁLCULO DE TOTAIS
+        // CÁLCULO PRÉVIO DO SUBTOTAL
         const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
         
         let valorUnitario = 19.99;
@@ -367,7 +403,7 @@ app.post('/mensagem', async (req, res) => {
         
         if (totalMarmitas >= 5) {
           valorUnitario = 17.49;
-          textoPromo = `🎉 *Promoção Aplicada!* (5+ unidades)\nValor reduzido para R$ ${valorUnitario}/unidade.\n\n`;
+          textoPromo = `🎉 *Promoção Kit Semanal Aplicada!*\n(5+ unidades = R$ 17,49/cada)\n\n`;
         }
 
         const subtotal = (totalMarmitas * valorUnitario).toFixed(2);
@@ -377,7 +413,7 @@ app.post('/mensagem', async (req, res) => {
           textoPromo +
           `📦 *Resumo do Pedido*\n` +
           `Qtd Total: ${totalMarmitas}\n` +
-          `Valor Total: R$ ${subtotal}\n\n` +
+          `Subtotal: R$ ${subtotal}\n\n` +
           `📍 Por favor, digite seu *ENDEREÇO COMPLETO* (Rua, Número e Bairro):`;
 
         cliente.ultimaMensagem = resposta;
@@ -389,17 +425,68 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    // ================= ENDEREÇO =================
+    // ================= ENDEREÇO & FINALIZAÇÃO (Novo Bloco) =================
     if (cliente.estado === 'AGUARDANDO_ENDERECO') {
       cliente.endereco = texto; 
-      cliente.estado = 'FINALIZADO';
       
+      const frete = calcularFrete(texto);
+      
+      // CASO 1: Bloqueio de área (Muito longe)
+      if (frete && frete.erro) {
+         await enviarMensagemWA(numero, frete.msg);
+         return res.status(200).json({ ok: true });
+      }
+
+      // Recálculo do valor das marmitas (Garantia)
+      const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
+      const valorUnitario = totalMarmitas >= 5 ? 17.49 : 19.99;
+      const subtotalMarmitas = totalMarmitas * valorUnitario;
+
+      let totalComFrete = 0;
+      let textoFreteCliente = "";
+
+      // CASO 2: Endereço Identificado (Tabela)
+      if (frete && !frete.erro) {
+         totalComFrete = subtotalMarmitas + frete.valor;
+         textoFreteCliente = frete.texto;
+         cliente.totalFinal = totalComFrete;
+      
+      // CASO 3: Endereço Não Identificado (Humano decide)
+      } else {
+         textoFreteCliente = "A calcular (Atendente irá informar)";
+         totalComFrete = subtotalMarmitas; // Valor parcial
+      }
+
+      cliente.estado = 'FINALIZADO';
+
+      // --- MENSAGEM PARA O CLIENTE ---
       resposta = 
-        `✅ *Pedido Confirmado!*\n\n` +
-        `Endereço: ${cliente.endereco}\n\n` +
-        `🛵 Estamos gerando seu link de pagamento e um atendente irá validar o pedido em breve.`;
+        `✅ *Pedido Recebido!*\n\n` +
+        `📍 Endereço: ${cliente.endereco}\n` +
+        `🚚 Frete: ${textoFreteCliente}\n` +
+        (frete && !frete.erro ? `💰 *Total Final: R$ ${totalComFrete.toFixed(2)}*\n\n` : `💰 *Subtotal (sem frete): R$ ${subtotalMarmitas.toFixed(2)}*\n\n`) +
+        `Aguarde um momento! Um atendente irá validar seu pedido e enviar a Chave PIX. 💠`;
 
       await enviarMensagemWA(numero, resposta); 
+
+      // --- MENSAGEM PARA O DONO (VOCÊ) 🔔 ---
+      let resumoDono = `🔔 *NOVO PEDIDO!* 🔔\n\n`;
+      resumoDono += `👤 Cliente: https://wa.me/${numero}\n`;
+      resumoDono += `📍 Local: *${cliente.endereco}*\n`;
+      resumoDono += `🚚 Frete Calc: ${frete ? frete.valor : 'NÃO IDENTIFICADO'}\n`;
+      resumoDono += `💰 Total Previsto: R$ ${totalComFrete.toFixed(2)}\n\n`;
+      resumoDono += `📝 *Itens:*\n`;
+      
+      cliente.pedido.forEach(item => {
+          resumoDono += `- ${item.quantidade}x ${item.prato} (${item.arroz || '-'} / ${item.strogonoff || '-'})\n`;
+      });
+
+      if (NUMERO_ADMIN !== '5551999999999') {
+          await enviarMensagemWA(NUMERO_ADMIN, resumoDono);
+      } else {
+          console.log("⚠️ ATENÇÃO: Configure o NUMERO_ADMIN no topo do código para receber os alertas!");
+      }
+
       return res.status(200).json({ ok: true });
     }
 
