@@ -12,8 +12,11 @@ app.use(express.urlencoded({ extended: true }));
 
 const TEMPO_INATIVO = 10 * 60 * 1000; // 10 minutos
 
-// ⚠️ COLOQUE AQUI O NÚMERO QUE VAI RECEBER OS PEDIDOS (COM 55 + DDD)
+// ⚠️⚠️ COLOQUE SEU NÚMERO AQUI (Com 55 e DDD) ⚠️⚠️
 const NUMERO_ADMIN = '5551999999999'; 
+
+// Objeto para guardar os Cronômetros de cada cliente
+const timersClientes = {};
 
 // ================= FUNÇÕES AUXILIARES =================
 
@@ -46,17 +49,38 @@ function carregarMenu() {
   }
 }
 
-function encerrouPorInatividade(cliente) {
-  if (!cliente.ultimoContato) return false;
-  return Date.now() - cliente.ultimoContato > TEMPO_INATIVO;
-}
-
 function erroComUltimaMensagem(cliente) {
   return (
     `❌ Não entendi.\n` +
     `Por favor, digite apenas o número da opção.\n\n` +
     (cliente.ultimaMensagem || menuPrincipal())
   );
+}
+
+// --- FUNÇÃO DO TIMER DE INATIVIDADE (NOVA) ---
+function iniciarTimerInatividade(numero) {
+  // 1. Limpa timer anterior se existir
+  if (timersClientes[numero]) {
+    clearTimeout(timersClientes[numero]);
+  }
+
+  // 2. Cria novo timer
+  timersClientes[numero] = setTimeout(async () => {
+    const cliente = estadoClientes.getEstado(numero);
+    
+    // Só avisa se o cliente estava no meio de algum processo (não no menu inicial)
+    if (cliente.estado !== 'INICIAL' && cliente.estado !== 'MENU') {
+      console.log(`[TIMEOUT] Encerrando ${numero} por inatividade.`);
+      
+      estadoClientes.limparPedido(numero);
+      cliente.estado = 'MENU';
+      
+      const msg = `💤 *Atendimento encerrado por falta de interação.*\nSeu pedido foi limpo. Quando quiser retomar, é só dar um Oi! 👋`;
+      await enviarMensagemWA(numero, msg);
+    }
+    
+    delete timersClientes[numero];
+  }, TEMPO_INATIVO);
 }
 
 // --- FUNÇÃO DE FRETE ---
@@ -115,7 +139,7 @@ async function enviarMensagemWA(numero, texto) {
     );
     console.log(`Mensagem enviada para ${numeroLimpo}`);
   } catch (err) {
-    console.error(`Erro ao enviar mensagem para ${numeroLimpo}:`, err.message);
+    console.error(`Erro envio msg ${numeroLimpo}:`, err.message);
   }
 }
 
@@ -153,23 +177,16 @@ app.post('/mensagem', async (req, res) => {
     if (!texto || !numero) return res.status(200).json({ ok: true });
 
     const mensagem = texto.trim().toLowerCase();
+
+    // --- REINICIA O TIMER DE INATIVIDADE (Pois o cliente falou algo) ---
+    iniciarTimerInatividade(numero);
     
     // --- LÓGICA DO BOT ---
     
     const cliente = estadoClientes.getEstado(numero);
-    let resposta = '';
-
-    // Verifica Inatividade
-    if (encerrouPorInatividade(cliente) && cliente.estado !== 'INICIAL') {
-      estadoClientes.limparPedido(numero);
-      const msgReiniciar = `⏰ *Atendimento encerrado por inatividade.*\nCaso queira retomar, é só dar um oi! 👋\n\n` + menuPrincipal();
-      await enviarMensagemWA(numero, msgReiniciar);
-      cliente.ultimoContato = Date.now();
-      cliente.estado = 'MENU';
-      return res.status(200).json({ ok: true });
-    }
-
     cliente.ultimoContato = Date.now();
+    
+    let resposta = '';
 
     // ===== PRIMEIRO CONTATO =====
     if (!cliente.recebeuSaudacao) {
@@ -215,7 +232,6 @@ app.post('/mensagem', async (req, res) => {
         const dados = carregarMenu();
         if(dados.length === 0) { await enviarMensagemWA(numero, "Cardápio indisponível."); return res.status(200).json({ok:true}); }
         
-        // (1) Correção: Aviso da Promoção no Topo
         let cardapio = `🍱 *Cardápio do Dia*\n`;
         cardapio += `🔥 *PROMOÇÃO:* Acima de 5 unid, o preço cai de ~R$ 19,99~ para *R$ 17,49/un*!\n\n`;
         
@@ -229,7 +245,6 @@ app.post('/mensagem', async (req, res) => {
         const dados = carregarMenu();
         if(dados.length === 0) { await enviarMensagemWA(numero, "Cardápio indisponível."); return res.status(200).json({ok:true}); }
         
-        // (1) Correção: Aviso da Promoção no Topo
         let lista = `🍽️ *Vamos montar seu pedido!*\n`;
         lista += `🔥 *PROMOÇÃO:* Acima de 5 unid = *R$ 17,49/un* (Economize!)\n\n`;
         lista += `Digite o NÚMERO do prato que deseja:\n\n`;
@@ -336,12 +351,11 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    // ================= FECHAR PEDIDO =================
+    // ================= FECHAR PEDIDO (PROMOÇÃO) =================
     if (cliente.estado === 'ADICIONAR_OUTRO') {
       if (mensagem === '1' || mensagem.includes('sim')) {
         cliente.estado = 'ESCOLHENDO_PRATO';
         const dados = carregarMenu();
-        // Avisa a promo aqui de novo pra lembrar
         let lista = `🍽️ *Escolha mais um prato:*\n`;
         lista += `(Lembre-se: 5+ unidades sai por R$ 17,49/cada)\n\n`;
         dados.forEach((item, i) => { lista += `${i + 1}️⃣  ${item.PRATO}\n`; });
@@ -412,7 +426,6 @@ app.post('/mensagem', async (req, res) => {
       cliente.totalFinal = totalComFrete;
       cliente.estado = 'ESCOLHENDO_PAGAMENTO';
       
-      // (5) Correção: Inserido o prazo de entrega antes do pagamento
       resposta = 
         `✅ *Endereço Recebido!*\n\n` +
         `📝 *Fechamento da Conta:*\n` +
@@ -434,6 +447,9 @@ app.post('/mensagem', async (req, res) => {
     if (cliente.estado === 'ESCOLHENDO_PAGAMENTO') {
       cliente.pagamento = texto; 
       
+      // MATA O TIMER (Já comprou!)
+      if (timersClientes[numero]) clearTimeout(timersClientes[numero]);
+
       cliente.estado = 'FINALIZADO';
 
       resposta = 
@@ -444,8 +460,8 @@ app.post('/mensagem', async (req, res) => {
       
       await enviarMensagemWA(numero, resposta);
 
-      // (6) Aviso ao Dono com LOGS para debug
-      console.log(`Tentando enviar alerta para o ADMIN: ${NUMERO_ADMIN}`);
+      // AVISO AO DONO
+      console.log(`Enviando alerta para ADMIN: ${NUMERO_ADMIN}`);
       
       let resumoDono = `🔔 *NOVO PEDIDO FINALIZADO!* 🔔\n\n`;
       resumoDono += `👤 Cliente: https://wa.me/${numero}\n`;
@@ -458,7 +474,6 @@ app.post('/mensagem', async (req, res) => {
           resumoDono += `- ${item.quantidade}x ${item.prato} (${item.arroz || '-'} / ${item.strogonoff || '-'})\n`;
       });
 
-      // Se o número admin for diferente do default, tenta enviar
       if (NUMERO_ADMIN !== '5551999999999') {
           await enviarMensagemWA(NUMERO_ADMIN, resumoDono);
       } else {
@@ -478,7 +493,6 @@ app.post('/mensagem', async (req, res) => {
       console.log(`[FEEDBACK] Cliente ${numero}: ${texto}`);
       cliente.estado = 'MENU';
       
-      // (4) Correção: Frase exata solicitada
       await enviarMensagemWA(numero, `✅ Obrigado! Sua mensagem foi registrada e entraremos em contato caso seja necessário.\n\n` + menuPrincipal());
       return res.status(200).json({ ok: true });
     }
