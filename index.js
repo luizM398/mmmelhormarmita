@@ -42,16 +42,9 @@ app.use(express.urlencoded({ extended: true }));
 // ==============================================================================
 
 const NUMERO_ADMIN = '5551984050946'; 
-
-// 1. SEU TOKEN DO MERCADO PAGO
-const MP_ACCESS_TOKEN = 'APP_USR-SEU-TOKEN-GIGANTE-AQUI'; 
-
-// 2. SEU TOKEN DO WASENDER
-const WASENDER_TOKEN = process.env.WASENDER_TOKEN || 'SUA_CHAVE_WASENDER_AQUI'; 
-
-// 3. SEU LINK DO RENDER (SEM BARRA NO FINAL)
-// Exemplo: https://marmita-bot.onrender.com
-const URL_DO_SEU_SITE = 'https://SEU-APP.onrender.com'; 
+const MP_ACCESS_TOKEN = 'APP_USR-3976540518966482-012110-64c2873d7929c168846b389d4f6c311e-281673709'; // <--- COLOQUE SEU TOKEN AQUI
+const WASENDER_TOKEN = process.env.WASENDER_TOKEN || '399f73920f6d3300e39fc9f8f0e34eb40510a8a14847e288580d5d10e40cdae4';
+const URL_DO_SEU_SITE = 'https://mmmelhormarmita.onrender.com'; 
 
 // ==============================================================================
 
