@@ -1,20 +1,19 @@
 const express = require('express');
 const xlsx = require('xlsx');
 const path = require('path');
-const estadoClientes = require('./estadoClientes'); // Garanta que este arquivo existe
+const estadoClientes = require('./estadoClientes'); 
 const axios = require('axios');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuração para processar JSON
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 const TEMPO_INATIVO = 10 * 60 * 1000; // 10 minutos
 
-// ⚠️⚠️ COLOQUE SEU NÚMERO AQUI (Com 55 e DDD) ⚠️⚠️
-const NUMERO_ADMIN = '5551984050946'; 
+// ⚠️ COLOQUE AQUI O NÚMERO QUE VAI RECEBER OS PEDIDOS (COM 55 + DDD)
+const NUMERO_ADMIN = '5551999999999'; 
 
 // ================= FUNÇÕES AUXILIARES =================
 
@@ -116,7 +115,7 @@ async function enviarMensagemWA(numero, texto) {
     );
     console.log(`Mensagem enviada para ${numeroLimpo}`);
   } catch (err) {
-    console.error('Erro ao enviar mensagem:', err.response?.data || err.message);
+    console.error(`Erro ao enviar mensagem para ${numeroLimpo}:`, err.message);
   }
 }
 
@@ -130,12 +129,12 @@ app.post('/mensagem', async (req, res) => {
   try {
     const body = req.body;
     
-    // 1. Validação
+    // Validação
     if (body.event !== 'messages.received') return res.status(200).json({ ok: true });
     const dadosMensagem = body?.data?.messages;
     if (!dadosMensagem) return res.status(200).json({ ok: true });
 
-    // 2. Identificação
+    // Identificação
     const remoteJid = dadosMensagem.key?.remoteJid || "";
     const fromMe = dadosMensagem.key?.fromMe;
     if (remoteJid.includes('status@broadcast')) return res.status(200).json({ ok: true });
@@ -144,8 +143,7 @@ app.post('/mensagem', async (req, res) => {
 
     let numeroRaw = dadosMensagem.key?.cleanedSenderPn || dadosMensagem.key?.senderPn || remoteJid;
     const numero = String(numeroRaw).split('@')[0].replace(/\D/g, '');
-
-    // 3. Extração Texto
+    
     const texto = 
       dadosMensagem.messageBody || 
       dadosMensagem.message?.conversation || 
@@ -164,7 +162,7 @@ app.post('/mensagem', async (req, res) => {
     // Verifica Inatividade
     if (encerrouPorInatividade(cliente) && cliente.estado !== 'INICIAL') {
       estadoClientes.limparPedido(numero);
-      const msgReiniciar = `⏰ *Atendimento encerrado por inatividade.*\n\n` + saudacaoTexto() + `\n\n` + menuPrincipal();
+      const msgReiniciar = `⏰ *Atendimento encerrado por inatividade.*\nCaso queira retomar, é só dar um oi! 👋\n\n` + menuPrincipal();
       await enviarMensagemWA(numero, msgReiniciar);
       cliente.ultimoContato = Date.now();
       cliente.estado = 'MENU';
@@ -216,7 +214,11 @@ app.post('/mensagem', async (req, res) => {
       if (mensagem === '1') { // Ver Cardápio
         const dados = carregarMenu();
         if(dados.length === 0) { await enviarMensagemWA(numero, "Cardápio indisponível."); return res.status(200).json({ok:true}); }
-        let cardapio = `🍱 *Cardápio do Dia*\n\n`;
+        
+        // (1) Correção: Aviso da Promoção no Topo
+        let cardapio = `🍱 *Cardápio do Dia*\n`;
+        cardapio += `🔥 *PROMOÇÃO:* Acima de 5 unid, o preço cai de ~R$ 19,99~ para *R$ 17,49/un*!\n\n`;
+        
         dados.forEach(item => { cardapio += `🔹 ${item.PRATO} – R$ ${item.VALOR}\n`; });
         cardapio += `\nPara fazer seu pedido, digite *2*.\nOu digite *0* para voltar.`;
         await enviarMensagemWA(numero, cardapio);
@@ -226,9 +228,15 @@ app.post('/mensagem', async (req, res) => {
       if (mensagem === '2') { // Fazer Pedido
         const dados = carregarMenu();
         if(dados.length === 0) { await enviarMensagemWA(numero, "Cardápio indisponível."); return res.status(200).json({ok:true}); }
-        let lista = `🍽️ *Digite o NÚMERO do prato que deseja:*\n\n`;
+        
+        // (1) Correção: Aviso da Promoção no Topo
+        let lista = `🍽️ *Vamos montar seu pedido!*\n`;
+        lista += `🔥 *PROMOÇÃO:* Acima de 5 unid = *R$ 17,49/un* (Economize!)\n\n`;
+        lista += `Digite o NÚMERO do prato que deseja:\n\n`;
+
         dados.forEach((item, i) => { lista += `${i + 1}️⃣  ${item.PRATO}\n`; });
         lista += `\n0️⃣ Voltar ao menu`;
+        
         cliente.estado = 'ESCOLHENDO_PRATO';
         cliente.opcoesPrato = dados;
         cliente.ultimaMensagem = lista;
@@ -328,12 +336,14 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    // ================= FECHAR PEDIDO (Onde a mágica da Promoção acontece) =================
+    // ================= FECHAR PEDIDO =================
     if (cliente.estado === 'ADICIONAR_OUTRO') {
       if (mensagem === '1' || mensagem.includes('sim')) {
         cliente.estado = 'ESCOLHENDO_PRATO';
         const dados = carregarMenu();
-        let lista = `🍽️ *Escolha mais um prato:*\n\n`;
+        // Avisa a promo aqui de novo pra lembrar
+        let lista = `🍽️ *Escolha mais um prato:*\n`;
+        lista += `(Lembre-se: 5+ unidades sai por R$ 17,49/cada)\n\n`;
         dados.forEach((item, i) => { lista += `${i + 1}️⃣  ${item.PRATO}\n`; });
         lista += `\n0️⃣ Cancelar tudo`;
         cliente.opcoesPrato = dados;
@@ -342,7 +352,6 @@ app.post('/mensagem', async (req, res) => {
       }
 
       if (mensagem === '2' || mensagem.includes('nao') || mensagem.includes('não')) {
-        // CÁLCULO DE PROMOÇÃO
         const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
         let valorUnitario = 19.99;
         let resumoPreco = `R$ 19,99/un`;
@@ -365,7 +374,7 @@ app.post('/mensagem', async (req, res) => {
           `Valor: ${resumoPreco}\n` +
           `💰 *Subtotal: R$ ${subtotal}* (Sem frete)\n` +
           `------------------------------\n\n` +
-          `📍 Agora, por favor, digite seu *ENDEREÇO COMPLETO* (Rua, Número e Bairro):`;
+          `📍 Agora, digite seu *ENDEREÇO COMPLETO* (Rua, Número e Bairro):`;
 
         cliente.ultimaMensagem = resposta;
         await enviarMensagemWA(numero, resposta); 
@@ -375,18 +384,16 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    // ================= ENDEREÇO & FRETE (Aqui ele soma o frete) =================
+    // ================= ENDEREÇO & FRETE =================
     if (cliente.estado === 'AGUARDANDO_ENDERECO') {
       cliente.endereco = texto; 
       const frete = calcularFrete(texto);
       
-      // Bloqueio
       if (frete && frete.erro) {
          await enviarMensagemWA(numero, frete.msg);
          return res.status(200).json({ ok: true });
       }
 
-      // Recálculo (Garantia)
       const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
       const valorUnitario = totalMarmitas >= 5 ? 17.49 : 19.99;
       const subtotalMarmitas = totalMarmitas * valorUnitario;
@@ -394,26 +401,25 @@ app.post('/mensagem', async (req, res) => {
       let totalComFrete = 0;
       let textoFrete = "";
 
-      // Cálculo Final
       if (frete && !frete.erro) {
          totalComFrete = subtotalMarmitas + frete.valor;
          textoFrete = frete.texto;
       } else {
-         totalComFrete = subtotalMarmitas; // Valor parcial
+         totalComFrete = subtotalMarmitas; 
          textoFrete = "A calcular (Atendente irá informar)";
       }
 
       cliente.totalFinal = totalComFrete;
-      
-      // MUDANÇA: Agora pergunta o pagamento
       cliente.estado = 'ESCOLHENDO_PAGAMENTO';
       
+      // (5) Correção: Inserido o prazo de entrega antes do pagamento
       resposta = 
         `✅ *Endereço Recebido!*\n\n` +
         `📝 *Fechamento da Conta:*\n` +
         `Subtotal Comida: R$ ${subtotalMarmitas.toFixed(2)}\n` +
         `Frete: ${textoFrete}\n` +
         `💰 *TOTAL: R$ ${totalComFrete.toFixed(2)}*\n\n` +
+        `🚚 *Entrega prevista: de 3 a 5 dias* (Sob encomenda)\n\n` +
         `💳 *Qual a forma de pagamento?*\n` +
         `1️⃣ PIX (Chave Copia e Cola)\n` +
         `2️⃣ Dinheiro (Na entrega)\n` +
@@ -424,13 +430,12 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    // ================= FORMA DE PAGAMENTO (Novo Passo Final) =================
+    // ================= FORMA DE PAGAMENTO =================
     if (cliente.estado === 'ESCOLHENDO_PAGAMENTO') {
-      cliente.pagamento = texto; // Salva o que o cliente digitou (Ex: "1", "Pix", "Dinheiro")
+      cliente.pagamento = texto; 
       
       cliente.estado = 'FINALIZADO';
 
-      // Resposta ao Cliente
       resposta = 
         `✅ *Pedido Confirmado com Sucesso!*\n\n` +
         `Recebemos seu pedido e sua forma de pagamento.\n` +
@@ -439,11 +444,13 @@ app.post('/mensagem', async (req, res) => {
       
       await enviarMensagemWA(numero, resposta);
 
-      // AVISO AO DONO (VOCÊ)
+      // (6) Aviso ao Dono com LOGS para debug
+      console.log(`Tentando enviar alerta para o ADMIN: ${NUMERO_ADMIN}`);
+      
       let resumoDono = `🔔 *NOVO PEDIDO FINALIZADO!* 🔔\n\n`;
       resumoDono += `👤 Cliente: https://wa.me/${numero}\n`;
       resumoDono += `📍 Endereço: *${cliente.endereco}*\n`;
-      resumoDono += `💳 Pagamento: *${cliente.pagamento}*\n`; // Mostra o que ele escolheu
+      resumoDono += `💳 Pagamento: *${cliente.pagamento}*\n`; 
       resumoDono += `💰 Total: R$ ${cliente.totalFinal.toFixed(2)}\n\n`;
       resumoDono += `📝 *Itens:*\n`;
       
@@ -451,10 +458,11 @@ app.post('/mensagem', async (req, res) => {
           resumoDono += `- ${item.quantidade}x ${item.prato} (${item.arroz || '-'} / ${item.strogonoff || '-'})\n`;
       });
 
+      // Se o número admin for diferente do default, tenta enviar
       if (NUMERO_ADMIN !== '5551999999999') {
           await enviarMensagemWA(NUMERO_ADMIN, resumoDono);
       } else {
-        console.log("⚠️ Configure o NUMERO_ADMIN para receber o alerta.");
+        console.log("⚠️ ATENÇÃO: NUMERO_ADMIN não configurado!");
       }
 
       return res.status(200).json({ ok: true });
@@ -470,7 +478,8 @@ app.post('/mensagem', async (req, res) => {
       console.log(`[FEEDBACK] Cliente ${numero}: ${texto}`);
       cliente.estado = 'MENU';
       
-      await enviarMensagemWA(numero, `✅ Obrigado! Sua mensagem foi registrada.\n\n` + menuPrincipal());
+      // (4) Correção: Frase exata solicitada
+      await enviarMensagemWA(numero, `✅ Obrigado! Sua mensagem foi registrada e entraremos em contato caso seja necessário.\n\n` + menuPrincipal());
       return res.status(200).json({ ok: true });
     }
 
