@@ -3,7 +3,33 @@ const xlsx = require('xlsx');
 const path = require('path');
 const axios = require('axios');
 const { MercadoPagoConfig, Payment, Preference } = require('mercadopago');
-const estadoClientes = require('./estadoClientes'); 
+
+// ==============================================================================
+// 🧠 MEMÓRIA DO ROBÔ (Fica aqui dentro para não dar erro)
+// ==============================================================================
+const clientes = {};
+
+const estadoClientes = {
+  getEstado: (numero) => {
+    if (!clientes[numero]) {
+      clientes[numero] = { 
+        estado: 'INICIAL', 
+        pedido: [], 
+        recebeuSaudacao: false,
+        ultimoContato: Date.now()
+      };
+    }
+    return clientes[numero];
+  },
+  limparPedido: (numero) => {
+    clientes[numero] = { 
+      estado: 'INICIAL', 
+      pedido: [], 
+      recebeuSaudacao: false,
+      ultimoContato: Date.now()
+    };
+  }
+};
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,12 +42,16 @@ app.use(express.urlencoded({ extended: true }));
 // ==============================================================================
 
 const NUMERO_ADMIN = '5551984050946'; 
-const MP_ACCESS_TOKEN = 'APP_USR-3976540518966482-012110-64c2873d7929c168846b389d4f6c311e-281673709'; // <--- COLOQUE SEU TOKEN AQUI
-const WASENDER_TOKEN = process.env.WASENDER_TOKEN || '399f73920f6d3300e39fc9f8f0e34eb40510a8a14847e288580d5d10e40cdae4';
 
-// 3. SEU LINK DO RENDER (Importante para o Comprovante Automático)
-// Exemplo: https://marmita-bot.onrender.com (SEM BARRA NO FINAL)
-const URL_DO_SEU_SITE = 'https://mmmelhormarmita.onrender.com'; 
+// 1. SEU TOKEN DO MERCADO PAGO
+const MP_ACCESS_TOKEN = 'APP_USR-SEU-TOKEN-GIGANTE-AQUI'; 
+
+// 2. SEU TOKEN DO WASENDER
+const WASENDER_TOKEN = process.env.WASENDER_TOKEN || 'SUA_CHAVE_WASENDER_AQUI'; 
+
+// 3. SEU LINK DO RENDER (SEM BARRA NO FINAL)
+// Exemplo: https://marmita-bot.onrender.com
+const URL_DO_SEU_SITE = 'https://SEU-APP.onrender.com'; 
 
 // ==============================================================================
 
@@ -32,14 +62,14 @@ const timersClientes = {};
 const client = new MercadoPagoConfig({ accessToken: MP_ACCESS_TOKEN, options: { timeout: 5000 } });
 
 // ==============================================================================
-// 💰 FUNÇÕES DE PAGAMENTO (BLINDADAS CONTRA ERRO 403)
+// 💰 FUNÇÕES DE PAGAMENTO (BLINDADAS)
 // ==============================================================================
 
 async function gerarPix(valor, clienteNome, clienteTelefone) {
   try {
     const payment = new Payment(client);
     
-    // TRUQUE ANTI-BLOQUEIO: E-mail único a cada pedido
+    // TRUQUE ANTI-BLOQUEIO
     const emailAleatorio = `comprador.marmita.${Date.now()}@gmail.com`;
     const telefoneLimpo = String(clienteTelefone).replace(/\D/g, '');
 
@@ -71,8 +101,6 @@ async function gerarPix(valor, clienteNome, clienteTelefone) {
 async function gerarLinkPagamento(itens, frete, clienteTelefone) {
   try {
     const preference = new Preference(client);
-    
-    // TRUQUE ANTI-BLOQUEIO TAMBÉM NO LINK
     const emailAleatorio = `comprador.marmita.${Date.now()}@gmail.com`;
     const telefoneLimpo = String(clienteTelefone).replace(/\D/g, '');
 
@@ -80,7 +108,7 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
       title: `(TESTE) ${item.prato}`,
       quantity: item.quantidade,
       currency_id: 'BRL',
-      unit_price: item.quantidade >= 5 ? 0.01 : 0.05 // PREÇO DE TESTE
+      unit_price: item.quantidade >= 5 ? 0.01 : 0.05
     }));
 
     if (frete > 0) {
@@ -118,12 +146,11 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
 }
 
 // ==============================================================================
-// 🔔 WEBHOOK (O Robô que avisa que pagou)
+// 🔔 WEBHOOK
 // ==============================================================================
 
 app.post('/webhook', async (req, res) => {
   const { action, data } = req.body;
-
   if (action === 'payment.created' || action === 'payment.updated') {
      try {
        const payment = new Payment(client);
@@ -132,18 +159,9 @@ app.post('/webhook', async (req, res) => {
        if (pagamentoInfo.status === 'approved') {
          const numeroCliente = pagamentoInfo.external_reference; 
          const valorPago = pagamentoInfo.transaction_amount;
-         const idTransacao = pagamentoInfo.id;
          
          console.log(`✅ Pagamento Aprovado! Cliente: ${numeroCliente}`);
-         
-         const comprovante = 
-           `🧾 *COMPROVANTE DE PAGAMENTO*\n` +
-           `--------------------------------\n` +
-           `✅ *Status:* APROVADO\n` +
-           `💰 *Valor:* R$ ${valorPago.toFixed(2)}\n` +
-           `🆔 *ID:* ${idTransacao}\n` +
-           `--------------------------------\n` +
-           `Pedido Confirmado! Já vamos preparar. 😋`;
+         const comprovante = `🧾 *COMPROVANTE DE PAGAMENTO*\n✅ *Status:* APROVADO\n💰 *Valor:* R$ ${valorPago.toFixed(2)}\nPedido Confirmado! Já vamos preparar. 😋`;
 
          await enviarMensagemWA(numeroCliente, comprovante);
          await enviarMensagemWA(NUMERO_ADMIN, `🔔 *PAGAMENTO CONFIRMADO!*\nCliente: ${numeroCliente}\nValor: R$ ${valorPago}`);
@@ -197,19 +215,14 @@ function iniciarTimerInatividade(numero) {
 function calcularFrete(textoEndereco) {
   const endereco = textoEndereco.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "");
   const contem = (lista) => lista.some(termo => endereco.includes(termo));
-
   const zonaBloqueada = ['hipica', 'belem novo', 'lami', 'sarandi', 'humaita', 'navegantes', 'centro historico', 'rubem berta', 'centro', 'viamao'];
   if (contem(zonaBloqueada) && !endereco.includes('restinga')) return { erro: true, msg: "🚫 Ainda não entregamos nesta região." };
-
   const zonaLocal = ['lomba do pinheiro', 'lomba', 'agronomia', 'parada', 'pda', 'joao de oliveira', 'mapa'];
   if (contem(zonaLocal)) return { valor: 0.01, texto: "R$ 0,01 (Teste)" };
-
   const zonaAlvo = ['bela vista', 'moinhos', 'mont serrat', 'auxiliadora', 'rio branco', 'petropolis'];
   if (contem(zonaAlvo)) return { valor: 0.03, texto: "R$ 0,03 (Teste)" };
-
   const zonaMedia = ['restinga', 'partenon', 'bento', 'jardim botanico', 'santana', 'sao jose', 'ipiranga'];
   if (contem(zonaMedia)) return { valor: 0.02, texto: "R$ 0,02 (Teste)" };
-
   return null; 
 }
 
@@ -227,7 +240,7 @@ async function enviarMensagemWA(numero, texto) {
 // 🚀 ROTAS
 // ==============================================================================
 
-app.get('/', (req, res) => { res.send('🤖 Bot Marmita V7.1 (Promo Fix + Anti-Block) ON 🚀'); });
+app.get('/', (req, res) => { res.send('🤖 Bot V7.2 (Anti-Loop) ON 🚀'); });
 
 app.post('/mensagem', async (req, res) => {
   try {
@@ -239,7 +252,11 @@ app.post('/mensagem', async (req, res) => {
 
     const remoteJid = dadosMensagem.key?.remoteJid || "";
     const fromMe = dadosMensagem.key?.fromMe;
-    if (remoteJid.includes('status') || remoteJid.includes('@g.us') || fromMe) return res.status(200).json({ ok: true });
+    
+    // FILTRO IMPORTANTE: Evita loop com mensagens do sistema
+    if (remoteJid.includes('status') || remoteJid.includes('@g.us') || fromMe === true) {
+      return res.status(200).json({ ok: true });
+    }
 
     let numeroRaw = dadosMensagem.key?.cleanedSenderPn || dadosMensagem.key?.senderPn || remoteJid;
     const numero = String(numeroRaw).split('@')[0].replace(/\D/g, '');
@@ -252,6 +269,8 @@ app.post('/mensagem', async (req, res) => {
     const cliente = estadoClientes.getEstado(numero);
     cliente.ultimoContato = Date.now();
     let resposta = '';
+
+    console.log(`📩 Cliente ${numero} mandou: "${mensagem}" (Estado: ${cliente.estado})`);
 
     // 1. SAUDAÇÃO
     if (!cliente.recebeuSaudacao) {
@@ -302,6 +321,7 @@ app.post('/mensagem', async (req, res) => {
         return res.status(200).json({ ok: true });
       }
       if (mensagem === '0') { await enviarMensagemWA(numero, menuPrincipal()); return res.status(200).json({ ok: true }); }
+      
       await enviarMensagemWA(numero, msgNaoEntendi(menuPrincipal()));
       return res.status(200).json({ ok: true });
     }
@@ -409,7 +429,6 @@ app.post('/mensagem', async (req, res) => {
       if (mensagem === '2') {
         const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
         
-        // --- 🛑 AQUI ESTAVA FALTANDO A LÓGICA DE AVISO DA PROMOÇÃO! ---
         let valorUnitario = 0.05;
         let textoPreco = "R$ 0,05/un (Teste)";
         let msgPromo = "";
@@ -419,7 +438,6 @@ app.post('/mensagem', async (req, res) => {
           textoPreco = "~R$ 0,05~ por *R$ 0,01* (Teste)";
           msgPromo = "🎉 *PARABÉNS! PROMOÇÃO APLICADA!* (Acima de 5 un)\n";
         }
-        // ----------------------------------------------------------------
 
         const subtotal = (totalMarmitas * valorUnitario).toFixed(2);
         
@@ -459,7 +477,6 @@ app.post('/mensagem', async (req, res) => {
       cliente.totalFinal = totalComFrete;
       cliente.estado = 'ESCOLHENDO_PAGAMENTO';
       
-      // MENSAGEM DE PAGAMENTO (SEM DINHEIRO)
       resposta = `✅ *Endereço OK!*\n\n💰 *TOTAL: R$ ${totalComFrete.toFixed(2)}*\n(Frete: ${textoFrete})\n\n💳 *Escolha o Pagamento Online:*\n\n1️⃣ PIX (Aprovação Imediata)\n2️⃣ Cartão de Crédito/Débito (Link)`;
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
@@ -470,7 +487,6 @@ app.post('/mensagem', async (req, res) => {
     if (cliente.estado === 'ESCOLHENDO_PAGAMENTO') {
       cliente.pagamento = texto; 
 
-      // OPÇÃO 1: PIX
       if (mensagem === '1' || mensagem.includes('pix')) {
          await enviarMensagemWA(numero, "💠 *Gerando PIX...*");
          const dadosPix = await gerarPix(cliente.totalFinal, "Cliente", numero);
@@ -483,7 +499,6 @@ app.post('/mensagem', async (req, res) => {
              await enviarMensagemWA(numero, "⚠️ Erro no banco. Tente novamente.");
          }
       } 
-      // OPÇÃO 2: CARTÃO
       else if (mensagem === '2' || mensagem.includes('cartao') || mensagem.includes('cartão')) {
          await enviarMensagemWA(numero, "💳 *Gerando Link...*");
          const link = await gerarLinkPagamento(cliente.pedido, cliente.valorFrete, numero);
