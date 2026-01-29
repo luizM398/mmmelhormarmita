@@ -13,7 +13,7 @@ app.use(express.urlencoded({ extended: true }));
 const TEMPO_INATIVO = 10 * 60 * 1000; // 10 minutos
 
 // ⚠️ SEU NÚMERO
-const NUMERO_ADMIN = '5551999999999'; 
+const NUMERO_ADMIN = '5551984050946'; 
 
 const timersClientes = {};
 
