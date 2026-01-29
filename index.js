@@ -60,34 +60,33 @@ function erroComUltimaMensagem(cliente) {
   );
 }
 
-// --- NOVA FUNÇÃO DE FRETE (Com São José e Santa Maria) ---
+// --- FUNÇÃO DE FRETE ---
 function calcularFrete(textoEndereco) {
   const endereco = textoEndereco.toLowerCase();
 
   // 1. ZONA LOCAL (Perto) - R$ 8,00
   const zonaLocal = ['lomba do pinheiro', 'agronomia', 'parada', 'pda', 'joão de oliveira', 'são pedro'];
   if (zonaLocal.some(bairro => endereco.includes(bairro))) {
-    return { valor: 8.00, texto: "R$ 8,00 (Entrega Local)" };
+    return { valor: 8.00, texto: "R$ 8,00" };
   }
 
   // 2. ZONA ALVO (Bairros Nobres) - R$ 20,00
   const zonaAlvo = ['bela vista', 'moinhos', 'mont serrat', 'auxiliadora', 'rio branco', 'petropolis', 'petrópolis', 'três figueiras', 'chácara das pedras'];
   if (zonaAlvo.some(bairro => endereco.includes(bairro))) {
-    return { valor: 20.00, texto: "R$ 20,00 (Entrega Especial)" };
+    return { valor: 20.00, texto: "R$ 20,00" };
   }
 
   // 3. ZONA INTERMEDIÁRIA (Caminho/Regional) - R$ 15,00
-  // Adicionados: São José, Santa Maria
   const zonaMedia = [
     'restinga', 'partenon', 'bento', 'intercap', 'jardim botânico', 'jardim botanico', 
-    'santana', 'viamão', 'viamao', 'são josé', 'sao jose', 'santa maria'
+    'santana', 'são josé', 'sao jose', 'santa maria'
   ];
   if (zonaMedia.some(bairro => endereco.includes(bairro))) {
-    return { valor: 15.00, texto: "R$ 15,00 (Entrega Regional)" };
+    return { valor: 15.00, texto: "R$ 15,00" };
   }
 
   // 4. ZONA BLOQUEADA (Muito Longe)
-  const zonaBloqueada = ['hípica', 'belém novo', 'lami', 'sarandi', 'humaitá', 'navegantes', 'centro histórico', 'rubem berta', 'centro'];
+  const zonaBloqueada = ['hípica', 'belém novo', 'lami', 'sarandi', 'humaitá', 'navegantes', 'centro histórico', 'rubem berta', 'centro', 'viamão', 'viamao'];
   if (zonaBloqueada.some(bairro => endereco.includes(bairro))) {
     return { erro: true, msg: "🚫 Desculpe, ainda não realizamos entregas nesta região (muito distante da nossa cozinha)." };
   }
@@ -131,30 +130,22 @@ app.post('/mensagem', async (req, res) => {
   try {
     const body = req.body;
     
-    // 1. Validação Básica
-    if (body.event !== 'messages.received') {
-      return res.status(200).json({ ok: true });
-    }
-
+    // 1. Validação
+    if (body.event !== 'messages.received') return res.status(200).json({ ok: true });
     const dadosMensagem = body?.data?.messages;
     if (!dadosMensagem) return res.status(200).json({ ok: true });
 
     // 2. Identificação
     const remoteJid = dadosMensagem.key?.remoteJid || "";
     const fromMe = dadosMensagem.key?.fromMe;
-
     if (remoteJid.includes('status@broadcast')) return res.status(200).json({ ok: true });
     if (remoteJid.includes('@g.us')) return res.status(200).json({ ok: true });
     if (fromMe === true) return res.status(200).json({ ok: true });
 
-    // Pega o número correto
-    let numeroRaw = 
-      dadosMensagem.key?.cleanedSenderPn || 
-      dadosMensagem.key?.senderPn || 
-      remoteJid;
+    let numeroRaw = dadosMensagem.key?.cleanedSenderPn || dadosMensagem.key?.senderPn || remoteJid;
     const numero = String(numeroRaw).split('@')[0].replace(/\D/g, '');
 
-    // 3. Extração do Texto
+    // 3. Extração Texto
     const texto = 
       dadosMensagem.messageBody || 
       dadosMensagem.message?.conversation || 
@@ -175,7 +166,6 @@ app.post('/mensagem', async (req, res) => {
       estadoClientes.limparPedido(numero);
       const msgReiniciar = `⏰ *Atendimento encerrado por inatividade.*\n\n` + saudacaoTexto() + `\n\n` + menuPrincipal();
       await enviarMensagemWA(numero, msgReiniciar);
-      
       cliente.ultimoContato = Date.now();
       cliente.estado = 'MENU';
       return res.status(200).json({ ok: true });
@@ -187,8 +177,6 @@ app.post('/mensagem', async (req, res) => {
     if (!cliente.recebeuSaudacao) {
       cliente.recebeuSaudacao = true;
       cliente.estado = 'MENU';
-      
-      // Envia Saudação + Menu juntos
       resposta = saudacaoTexto() + `\n\n` + menuPrincipal();
       await enviarMensagemWA(numero, resposta);
       return res.status(200).json({ ok: true });
@@ -199,14 +187,12 @@ app.post('/mensagem', async (req, res) => {
       cliente.estadoAnterior = cliente.estado;
       cliente.mensagemAntesDoCancelar = cliente.ultimaMensagem;
       cliente.estado = 'CONFIRMAR_CANCELAMENTO';
-
       resposta = `⚠️ Tem certeza que deseja cancelar o pedido?\n\n1️⃣ Sim, cancelar\n2️⃣ Não, continuar`;
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
       return res.status(200).json({ ok: true });
     }
 
-    // ===== CONFIRMAR CANCELAMENTO =====
     if (cliente.estado === 'CONFIRMAR_CANCELAMENTO') {
       if (mensagem === '1') {
         estadoClientes.limparPedido(numero);
@@ -229,31 +215,20 @@ app.post('/mensagem', async (req, res) => {
     if (cliente.estado === 'MENU') {
       if (mensagem === '1') { // Ver Cardápio
         const dados = carregarMenu();
-        if(dados.length === 0) {
-            await enviarMensagemWA(numero, "Desculpe, cardápio indisponível no momento.");
-            return res.status(200).json({ok:true});
-        }
-
+        if(dados.length === 0) { await enviarMensagemWA(numero, "Cardápio indisponível."); return res.status(200).json({ok:true}); }
         let cardapio = `🍱 *Cardápio do Dia*\n\n`;
         dados.forEach(item => { cardapio += `🔹 ${item.PRATO} – R$ ${item.VALOR}\n`; });
-        
         cardapio += `\nPara fazer seu pedido, digite *2*.\nOu digite *0* para voltar.`;
-        
         await enviarMensagemWA(numero, cardapio);
         return res.status(200).json({ ok: true });
       }
 
       if (mensagem === '2') { // Fazer Pedido
         const dados = carregarMenu();
-        if(dados.length === 0) {
-            await enviarMensagemWA(numero, "Desculpe, cardápio indisponível.");
-            return res.status(200).json({ok:true});
-        }
-
+        if(dados.length === 0) { await enviarMensagemWA(numero, "Cardápio indisponível."); return res.status(200).json({ok:true}); }
         let lista = `🍽️ *Digite o NÚMERO do prato que deseja:*\n\n`;
         dados.forEach((item, i) => { lista += `${i + 1}️⃣  ${item.PRATO}\n`; });
         lista += `\n0️⃣ Voltar ao menu`;
-
         cliente.estado = 'ESCOLHENDO_PRATO';
         cliente.opcoesPrato = dados;
         cliente.ultimaMensagem = lista;
@@ -269,11 +244,7 @@ app.post('/mensagem', async (req, res) => {
         return res.status(200).json({ ok: true });
       }
       
-      if (mensagem === '0') {
-         await enviarMensagemWA(numero, menuPrincipal());
-         return res.status(200).json({ ok: true });
-      }
-
+      if (mensagem === '0') { await enviarMensagemWA(numero, menuPrincipal()); return res.status(200).json({ ok: true }); }
       await enviarMensagemWA(numero, `🤷‍♂️ Opção inválida.\n\n` + menuPrincipal());
       return res.status(200).json({ ok: true });
     }
@@ -285,24 +256,14 @@ app.post('/mensagem', async (req, res) => {
         await enviarMensagemWA(numero, menuPrincipal());
         return res.status(200).json({ ok: true });
       }
-
       const escolha = parseInt(mensagem);
       if (isNaN(escolha) || escolha < 1 || escolha > cliente.opcoesPrato.length) {
         await enviarMensagemWA(numero, "❌ Número inválido. Digite o número que aparece ao lado do prato.");
         return res.status(200).json({ ok: true });
       }
-
       const prato = cliente.opcoesPrato[escolha - 1];
       const nomePrato = prato.PRATO.toLowerCase();
-
-      cliente.pedido.push({
-        prato: prato.PRATO,
-        valor: prato.VALOR,
-        arroz: null,
-        strogonoff: null,
-        quantidade: 0
-      });
-
+      cliente.pedido.push({ prato: prato.PRATO, valor: prato.VALOR, arroz: null, strogonoff: null, quantidade: 0 });
       cliente.precisaArroz = nomePrato.includes('arroz');
       cliente.precisaStrogonoff = nomePrato.includes('strogonoff');
 
@@ -327,13 +288,9 @@ app.post('/mensagem', async (req, res) => {
     // ================= VARIAÇÃO ARROZ =================
     if (cliente.estado === 'VARIACAO_ARROZ') {
       const itemAtual = cliente.pedido[cliente.pedido.length - 1];
-      
       if (mensagem === '1' || mensagem.includes('branco')) itemAtual.arroz = 'Branco';
       else if (mensagem === '2' || mensagem.includes('integral')) itemAtual.arroz = 'Integral';
-      else {
-        await enviarMensagemWA(numero, "❌ Opção inválida. Digite 1 ou 2.");
-        return res.status(200).json({ ok: true });
-      }
+      else { await enviarMensagemWA(numero, "❌ Opção inválida. Digite 1 ou 2."); return res.status(200).json({ ok: true }); }
 
       if (cliente.precisaStrogonoff) {
         cliente.estado = 'VARIACAO_STROGONOFF';
@@ -350,14 +307,9 @@ app.post('/mensagem', async (req, res) => {
     // ================= VARIAÇÃO STROGONOFF =================
     if (cliente.estado === 'VARIACAO_STROGONOFF') {
       const itemAtual = cliente.pedido[cliente.pedido.length - 1];
-      
       if (mensagem === '1' || mensagem.includes('tradicional')) itemAtual.strogonoff = 'Tradicional';
       else if (mensagem === '2' || mensagem.includes('light')) itemAtual.strogonoff = 'Light';
-      else {
-        await enviarMensagemWA(numero, "❌ Opção inválida. Digite 1 ou 2.");
-        return res.status(200).json({ ok: true });
-      }
-
+      else { await enviarMensagemWA(numero, "❌ Opção inválida. Digite 1 ou 2."); return res.status(200).json({ ok: true }); }
       cliente.estado = 'QUANTIDADE';
       resposta = `🔢 Digite a *quantidade*:`;
       await enviarMensagemWA(numero, resposta); 
@@ -367,13 +319,8 @@ app.post('/mensagem', async (req, res) => {
     // ================= QUANTIDADE =================
     if (cliente.estado === 'QUANTIDADE') {
       const qtd = parseInt(mensagem);
-      if (isNaN(qtd) || qtd < 1) {
-        await enviarMensagemWA(numero, "❌ Digite um número válido maior que 0.");
-        return res.status(200).json({ ok: true });
-      }
-
+      if (isNaN(qtd) || qtd < 1) { await enviarMensagemWA(numero, "❌ Digite um número válido maior que 0."); return res.status(200).json({ ok: true }); }
       cliente.pedido[cliente.pedido.length - 1].quantidade = qtd;
-      
       cliente.estado = 'ADICIONAR_OUTRO';
       resposta = `✅ *Adicionado!*\n\nDeseja pedir mais alguma coisa?\n\n1️⃣ Sim, escolher outro prato\n2️⃣ Não, fechar pedido`;
       cliente.ultimaMensagem = resposta;
@@ -381,7 +328,7 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    // ================= ADICIONAR OUTRO / FECHAR =================
+    // ================= FECHAR PEDIDO (Onde a mágica da Promoção acontece) =================
     if (cliente.estado === 'ADICIONAR_OUTRO') {
       if (mensagem === '1' || mensagem.includes('sim')) {
         cliente.estado = 'ESCOLHENDO_PRATO';
@@ -395,86 +342,109 @@ app.post('/mensagem', async (req, res) => {
       }
 
       if (mensagem === '2' || mensagem.includes('nao') || mensagem.includes('não')) {
-        // CÁLCULO PRÉVIO DO SUBTOTAL
+        // CÁLCULO DE PROMOÇÃO
         const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
-        
         let valorUnitario = 19.99;
-        let textoPromo = "";
+        let resumoPreco = `R$ 19,99/un`;
+        let msgPromo = "";
         
         if (totalMarmitas >= 5) {
           valorUnitario = 17.49;
-          textoPromo = `🎉 *Promoção Kit Semanal Aplicada!*\n(5+ unidades = R$ 17,49/cada)\n\n`;
+          resumoPreco = `~R$ 19,99~ por *R$ 17,49* a unidade`;
+          msgPromo = `🎉 *Parabéns! Promoção Aplicada!*\n`;
         }
 
         const subtotal = (totalMarmitas * valorUnitario).toFixed(2);
         
         cliente.estado = 'AGUARDANDO_ENDERECO';
         resposta = 
-          textoPromo +
-          `📦 *Resumo do Pedido*\n` +
-          `Qtd Total: ${totalMarmitas}\n` +
-          `Subtotal: R$ ${subtotal}\n\n` +
-          `📍 Por favor, digite seu *ENDEREÇO COMPLETO* (Rua, Número e Bairro):`;
+          msgPromo +
+          `------------------------------\n` +
+          `🥡 *Resumo do Pedido:*\n` +
+          `Marmitas: ${totalMarmitas}\n` +
+          `Valor: ${resumoPreco}\n` +
+          `💰 *Subtotal: R$ ${subtotal}* (Sem frete)\n` +
+          `------------------------------\n\n` +
+          `📍 Agora, por favor, digite seu *ENDEREÇO COMPLETO* (Rua, Número e Bairro):`;
 
         cliente.ultimaMensagem = resposta;
         await enviarMensagemWA(numero, resposta); 
         return res.status(200).json({ ok: true });
       }
-
       await enviarMensagemWA(numero, "❌ Opção inválida. Digite 1 ou 2.");
       return res.status(200).json({ ok: true });
     }
 
-    // ================= ENDEREÇO & FINALIZAÇÃO (Novo Bloco) =================
+    // ================= ENDEREÇO & FRETE (Aqui ele soma o frete) =================
     if (cliente.estado === 'AGUARDANDO_ENDERECO') {
       cliente.endereco = texto; 
-      
       const frete = calcularFrete(texto);
       
-      // CASO 1: Bloqueio de área (Muito longe)
+      // Bloqueio
       if (frete && frete.erro) {
          await enviarMensagemWA(numero, frete.msg);
          return res.status(200).json({ ok: true });
       }
 
-      // Recálculo do valor das marmitas (Garantia)
+      // Recálculo (Garantia)
       const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
       const valorUnitario = totalMarmitas >= 5 ? 17.49 : 19.99;
       const subtotalMarmitas = totalMarmitas * valorUnitario;
 
       let totalComFrete = 0;
-      let textoFreteCliente = "";
+      let textoFrete = "";
 
-      // CASO 2: Endereço Identificado (Tabela)
+      // Cálculo Final
       if (frete && !frete.erro) {
          totalComFrete = subtotalMarmitas + frete.valor;
-         textoFreteCliente = frete.texto;
-         cliente.totalFinal = totalComFrete;
-      
-      // CASO 3: Endereço Não Identificado (Humano decide)
+         textoFrete = frete.texto;
       } else {
-         textoFreteCliente = "A calcular (Atendente irá informar)";
          totalComFrete = subtotalMarmitas; // Valor parcial
+         textoFrete = "A calcular (Atendente irá informar)";
       }
 
+      cliente.totalFinal = totalComFrete;
+      
+      // MUDANÇA: Agora pergunta o pagamento
+      cliente.estado = 'ESCOLHENDO_PAGAMENTO';
+      
+      resposta = 
+        `✅ *Endereço Recebido!*\n\n` +
+        `📝 *Fechamento da Conta:*\n` +
+        `Subtotal Comida: R$ ${subtotalMarmitas.toFixed(2)}\n` +
+        `Frete: ${textoFrete}\n` +
+        `💰 *TOTAL: R$ ${totalComFrete.toFixed(2)}*\n\n` +
+        `💳 *Qual a forma de pagamento?*\n` +
+        `1️⃣ PIX (Chave Copia e Cola)\n` +
+        `2️⃣ Dinheiro (Na entrega)\n` +
+        `3️⃣ Cartão (Maquininha na entrega)`;
+
+      cliente.ultimaMensagem = resposta;
+      await enviarMensagemWA(numero, resposta); 
+      return res.status(200).json({ ok: true });
+    }
+
+    // ================= FORMA DE PAGAMENTO (Novo Passo Final) =================
+    if (cliente.estado === 'ESCOLHENDO_PAGAMENTO') {
+      cliente.pagamento = texto; // Salva o que o cliente digitou (Ex: "1", "Pix", "Dinheiro")
+      
       cliente.estado = 'FINALIZADO';
 
-      // --- MENSAGEM PARA O CLIENTE ---
+      // Resposta ao Cliente
       resposta = 
-        `✅ *Pedido Recebido!*\n\n` +
-        `📍 Endereço: ${cliente.endereco}\n` +
-        `🚚 Frete: ${textoFreteCliente}\n` +
-        (frete && !frete.erro ? `💰 *Total Final: R$ ${totalComFrete.toFixed(2)}*\n\n` : `💰 *Subtotal (sem frete): R$ ${subtotalMarmitas.toFixed(2)}*\n\n`) +
-        `Aguarde um momento! Um atendente irá validar seu pedido e enviar a Chave PIX. 💠`;
+        `✅ *Pedido Confirmado com Sucesso!*\n\n` +
+        `Recebemos seu pedido e sua forma de pagamento.\n` +
+        `Em instantes, um de nossos atendentes entrará em contato para confirmar e enviar a chave Pix (se for o caso).\n\n` +
+        `Muito obrigado pela preferência! 😋🍱`;
+      
+      await enviarMensagemWA(numero, resposta);
 
-      await enviarMensagemWA(numero, resposta); 
-
-      // --- MENSAGEM PARA O DONO (VOCÊ) 🔔 ---
-      let resumoDono = `🔔 *NOVO PEDIDO!* 🔔\n\n`;
+      // AVISO AO DONO (VOCÊ)
+      let resumoDono = `🔔 *NOVO PEDIDO FINALIZADO!* 🔔\n\n`;
       resumoDono += `👤 Cliente: https://wa.me/${numero}\n`;
-      resumoDono += `📍 Local: *${cliente.endereco}*\n`;
-      resumoDono += `🚚 Frete Calc: ${frete ? frete.valor : 'NÃO IDENTIFICADO'}\n`;
-      resumoDono += `💰 Total Previsto: R$ ${totalComFrete.toFixed(2)}\n\n`;
+      resumoDono += `📍 Endereço: *${cliente.endereco}*\n`;
+      resumoDono += `💳 Pagamento: *${cliente.pagamento}*\n`; // Mostra o que ele escolheu
+      resumoDono += `💰 Total: R$ ${cliente.totalFinal.toFixed(2)}\n\n`;
       resumoDono += `📝 *Itens:*\n`;
       
       cliente.pedido.forEach(item => {
@@ -484,7 +454,7 @@ app.post('/mensagem', async (req, res) => {
       if (NUMERO_ADMIN !== '5551999999999') {
           await enviarMensagemWA(NUMERO_ADMIN, resumoDono);
       } else {
-          console.log("⚠️ ATENÇÃO: Configure o NUMERO_ADMIN no topo do código para receber os alertas!");
+        console.log("⚠️ Configure o NUMERO_ADMIN para receber o alerta.");
       }
 
       return res.status(200).json({ ok: true });
@@ -504,7 +474,7 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    // FALLBACK GERAL (Se nada der certo)
+    // FALLBACK
     await enviarMensagemWA(numero, saudacaoTexto() + `\n\n` + menuPrincipal());
     return res.status(200).json({ ok: true });
 
