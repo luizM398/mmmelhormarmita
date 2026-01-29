@@ -16,12 +16,12 @@ app.use(express.urlencoded({ extended: true }));
 // ==============================================================================
 
 const NUMERO_ADMIN = '5551984050946'; 
-const MP_ACCESS_TOKEN = 'APP_USR-3976540518966482-012110-64c2873d7929c168846b389d4f6c311e-281673709'; // <--- COLOQUE SEU TOKEN AQUI
-const WASENDER_TOKEN = process.env.WASENDER_TOKEN || '399f73920f6d3300e39fc9f8f0e34eb40510a8a14847e288580d5d10e40cdae4'; 
+const MP_ACCESS_TOKEN = 'APP_USR-SEU-TOKEN-GIGANTE-AQUI'; // <--- SEU TOKEN DO MERCADO PAGO
+const WASENDER_TOKEN = process.env.WASENDER_TOKEN || 'SUA_CHAVE_WASENDER_AQUI'; // <--- SEU TOKEN WASENDER
 
 // ⚠️ IMPORTANTE: Coloque aqui o link do seu Render (sem barra no final)
-// Isso serve para o Mercado Pago saber onde avisar que o dinheiro caiu.
-const URL_DO_SEU_SITE = 'https://mmmelhormarmita.onrender.com'; 
+// Exemplo: https://bot-marmita.onrender.com
+const URL_DO_SEU_SITE = 'https://SEU-APP.onrender.com'; 
 
 // ==============================================================================
 
@@ -43,9 +43,7 @@ async function gerarPix(valor, clienteNome, clienteTelefone) {
       transaction_amount: parseFloat(valor.toFixed(2)),
       description: 'Pedido Marmita Delivery',
       payment_method_id: 'pix',
-      // Aqui dizemos pro MP avisar a gente quando pagar
       notification_url: `${URL_DO_SEU_SITE}/webhook`, 
-      // Guardamos o numero do cliente aqui pra saber quem pagou depois
       external_reference: String(clienteTelefone), 
       payer: {
         email: emailCliente,
@@ -87,7 +85,7 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
     const body = {
       items: itemsPreference,
       notification_url: `${URL_DO_SEU_SITE}/webhook`,
-      external_reference: String(clienteTelefone), // Salva o zap do cliente
+      external_reference: String(clienteTelefone),
       back_urls: {
         success: 'https://www.google.com', 
         failure: 'https://www.google.com',
@@ -111,22 +109,21 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
 app.post('/webhook', async (req, res) => {
   const { action, data } = req.body;
 
-  // Se for notificação de pagamento criado/atualizado
   if (action === 'payment.created' || action === 'payment.updated') {
      try {
        const payment = new Payment(client);
        const pagamentoInfo = await payment.get({ id: data.id });
        
        const status = pagamentoInfo.status;
-       const numeroCliente = pagamentoInfo.external_reference; // Recuperamos o Zap
+       const numeroCliente = pagamentoInfo.external_reference; 
        const valorPago = pagamentoInfo.transaction_amount;
        const dataPagamento = new Date().toLocaleString('pt-BR');
        const idTransacao = pagamentoInfo.id;
 
+       // Evita duplicidade simples checando se já está aprovado
        if (status === 'approved') {
          console.log(`✅ Pagamento Aprovado! Cliente: ${numeroCliente}`);
          
-         // GERAR O COMPROVANTE DO SERVIDOR
          const comprovante = 
            `🧾 *COMPROVANTE DE PAGAMENTO*\n` +
            `--------------------------------\n` +
@@ -135,14 +132,11 @@ app.post('/webhook', async (req, res) => {
            `💰 *Valor:* R$ ${valorPago.toFixed(2)}\n` +
            `🆔 *Transação:* ${idTransacao}\n` +
            `--------------------------------\n` +
-           `Seu pedido já está sendo preparado!\n` +
-           `Qualquer dúvida, é só chamar. 😋`;
+           `Pedido Confirmado! Já estamos preparando tudo por aqui.\n` +
+           `Qualquer dúvida, é só chamar! 😋`;
 
-         // Envia o comprovante pro cliente
          await enviarMensagemWA(numeroCliente, comprovante);
-         
-         // Avisa o Admin também
-         await enviarMensagemWA(NUMERO_ADMIN, `🔔 *PAGAMENTO CONFIRMADO!*\nO cliente ${numeroCliente} acabou de pagar R$ ${valorPago}.`);
+         await enviarMensagemWA(NUMERO_ADMIN, `🔔 *PAGAMENTO CONFIRMADO!*\nO cliente ${numeroCliente} pagou R$ ${valorPago}. Pode preparar!`);
        }
      } catch (error) {
        console.error("Erro no Webhook:", error);
@@ -152,11 +146,11 @@ app.post('/webhook', async (req, res) => {
 });
 
 // ==============================================================================
-// 🧠 LÓGICA PADRÃO (Mesma de antes, só removi o pedido de foto)
+// 🧠 LÓGICA DO ROBÔ
 // ==============================================================================
 
 function saudacaoTexto() {
-  return `👋 Olá! Seja muito bem-vindo(a) à *Melhor Marmita* 🍱\n⚠️ *MODO TESTE AUTOMÁTICO* ⚠️`;
+  return `👋 Olá! Seja muito bem-vindo(a) à *Melhor Marmita* 🍱\n⚠️ *PEDIDOS ONLINE (MODO TESTE)* ⚠️`;
 }
 
 function menuPrincipal() {
@@ -223,7 +217,7 @@ async function enviarMensagemWA(numero, texto) {
 // 🚀 ROTAS E FLUXO PRINCIPAL
 // ==============================================================================
 
-app.get('/', (req, res) => { res.send('🤖 Bot Marmita V6 (Webhook ON) 🚀'); });
+app.get('/', (req, res) => { res.send('🤖 Bot Marmita V6.1 (Online Only) ON 🚀'); });
 
 app.post('/mensagem', async (req, res) => {
   try {
@@ -249,6 +243,7 @@ app.post('/mensagem', async (req, res) => {
     cliente.ultimoContato = Date.now();
     let resposta = '';
 
+    // 1. SAUDAÇÃO
     if (!cliente.recebeuSaudacao) {
       cliente.recebeuSaudacao = true;
       cliente.estado = 'MENU';
@@ -257,6 +252,7 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
     
+    // 2. CANCELAR
     if (mensagem === 'cancelar') {
       estadoClientes.limparPedido(numero);
       const reset = estadoClientes.getEstado(numero);
@@ -266,11 +262,12 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
+    // 3. MENU
     if (cliente.estado === 'MENU') {
       if (mensagem === '1') { 
         const dados = carregarMenu();
         if(dados.length === 0) { await enviarMensagemWA(numero, "⚠️ Cardápio off."); return res.status(200).json({ok:true}); }
-        let cardapio = `🍱 *Cardápio* (TESTE)\n\n`;
+        let cardapio = `🍱 *Cardápio* (TESTE ONLINE)\n\n`;
         dados.forEach(item => { cardapio += `🔹 ${item.PRATO} – R$ 0,05\n`; });
         cardapio += `\n2️⃣ Fazer Pedido\n0️⃣ Voltar`;
         cliente.estado = 'VENDO_CARDAPIO';
@@ -299,6 +296,7 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
+    // 4. LEITURA DE CARDÁPIO
     if (cliente.estado === 'VENDO_CARDAPIO') {
        if (mensagem === '2') {
          const dados = carregarMenu();
@@ -319,6 +317,7 @@ app.post('/mensagem', async (req, res) => {
        return res.status(200).json({ ok: true });
     }
 
+    // 5. ESCOLHA DE PRATO
     if (cliente.estado === 'ESCOLHENDO_PRATO') {
       if (mensagem === '0') { cliente.estado = 'MENU'; await enviarMensagemWA(numero, menuPrincipal()); return res.status(200).json({ ok: true }); }
       const escolha = parseInt(mensagem);
@@ -412,6 +411,7 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
+    // 6. FRETE E FECHAMENTO
     if (cliente.estado === 'AGUARDANDO_ENDERECO') {
       cliente.endereco = texto; 
       const frete = calcularFrete(texto);
@@ -437,15 +437,18 @@ app.post('/mensagem', async (req, res) => {
       cliente.totalFinal = totalComFrete;
       cliente.estado = 'ESCOLHENDO_PAGAMENTO';
       
-      resposta = `✅ *Endereço OK!*\n\n💰 *TOTAL: R$ ${totalComFrete.toFixed(2)}*\n(Frete: ${textoFrete})\n\n💳 *Pagamento:*\n1️⃣ PIX (Automático)\n2️⃣ Dinheiro (Entrega)\n3️⃣ Cartão (Link)`;
+      // MENSAGEM DE PAGAMENTO (SEM DINHEIRO)
+      resposta = `✅ *Endereço OK!*\n\n💰 *TOTAL: R$ ${totalComFrete.toFixed(2)}*\n(Frete: ${textoFrete})\n\n💳 *Escolha o Pagamento Online:*\n\n1️⃣ PIX (Aprovação Imediata)\n2️⃣ Cartão de Crédito/Débito (Link)`;
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
       return res.status(200).json({ ok: true });
     }
 
+    // 7. PAGAMENTO ONLINE
     if (cliente.estado === 'ESCOLHENDO_PAGAMENTO') {
       cliente.pagamento = texto; 
 
+      // OPÇÃO 1: PIX
       if (mensagem === '1' || mensagem.includes('pix')) {
          await enviarMensagemWA(numero, "💠 *Gerando PIX...*");
          const dadosPix = await gerarPix(cliente.totalFinal, "Cliente", numero);
@@ -458,17 +461,15 @@ app.post('/mensagem', async (req, res) => {
              await enviarMensagemWA(numero, "⚠️ Erro no banco. Tente novamente.");
          }
       } 
-      else if (mensagem === '2') {
-         await enviarMensagemWA(numero, "💵 Ok! Pagamento em dinheiro na entrega.");
-      }
-      else if (mensagem === '3') {
+      // OPÇÃO 2: CARTÃO (Agora é a opção 2!)
+      else if (mensagem === '2' || mensagem.includes('cartao') || mensagem.includes('cartão')) {
          await enviarMensagemWA(numero, "💳 *Gerando Link...*");
          const link = await gerarLinkPagamento(cliente.pedido, cliente.valorFrete, numero);
          
          if (link) {
-             await enviarMensagemWA(numero, `✅ Pague aqui:\n${link}\n\nAssim que aprovar, envio o comprovante!`);
+             await enviarMensagemWA(numero, `✅ Pague com Cartão aqui:\n${link}\n\nAssim que aprovar, envio o comprovante!`);
          } else {
-             await enviarMensagemWA(numero, "⚠️ Levaremos a maquininha.");
+             await enviarMensagemWA(numero, "⚠️ Erro ao gerar link.");
          }
       }
       else {
@@ -477,16 +478,10 @@ app.post('/mensagem', async (req, res) => {
       }
 
       cliente.estado = 'FINALIZADO';
-      
-      // Aviso Básico ao Dono (O aviso detalhado de pagamento vem pelo Webhook)
-      if (mensagem !== '1' && mensagem !== '3') {
-          console.log(`Enviando alerta manual para ADMIN`);
-          await enviarMensagemWA(NUMERO_ADMIN, `🔔 *NOVO PEDIDO (Dinheiro)!*\nCliente: ${numero}\nTotal: R$ ${cliente.totalFinal.toFixed(2)}`);
-      }
-
       return res.status(200).json({ ok: true });
     }
 
+    // 8. ELOGIOS
     if (cliente.estado === 'ELOGIOS') {
       console.log(`[FEEDBACK] Cliente ${numero}: ${texto}`);
       cliente.estado = 'MENU';
