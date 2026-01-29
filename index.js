@@ -5,7 +5,7 @@ const axios = require('axios');
 const { MercadoPagoConfig, Payment, Preference } = require('mercadopago');
 
 // ==============================================================================
-// 🧠 MEMÓRIA DO ROBÔ (Fica aqui dentro para não dar erro)
+// 🧠 MEMÓRIA DO ROBÔ
 // ==============================================================================
 const clientes = {};
 
@@ -42,27 +42,31 @@ app.use(express.urlencoded({ extended: true }));
 // ==============================================================================
 
 const NUMERO_ADMIN = '5551984050946'; 
-const MP_ACCESS_TOKEN = 'APP_USR-3976540518966482-012110-64c2873d7929c168846b389d4f6c311e-281673709'; // <--- COLOQUE SEU TOKEN AQUI
-const WASENDER_TOKEN = process.env.WASENDER_TOKEN || '399f73920f6d3300e39fc9f8f0e34eb40510a8a14847e288580d5d10e40cdae4';
-const URL_DO_SEU_SITE = 'https://mmmelhormarmita.onrender.com'; 
+
+// 1. SEU TOKEN DO MERCADO PAGO
+const MP_ACCESS_TOKEN = 'APP_USR-SEU-TOKEN-GIGANTE-AQUI'; 
+
+// 2. SEU TOKEN DO WASENDER
+const WASENDER_TOKEN = process.env.WASENDER_TOKEN || 'SUA_CHAVE_WASENDER_AQUI'; 
+
+// 3. SEU LINK DO RENDER (SEM BARRA NO FINAL)
+// Exemplo: https://marmita-bot.onrender.com
+const URL_DO_SEU_SITE = 'https://SEU-APP.onrender.com'; 
 
 // ==============================================================================
 
 const TEMPO_INATIVO = 10 * 60 * 1000; 
 const timersClientes = {};
 
-// Inicializa Mercado Pago
 const client = new MercadoPagoConfig({ accessToken: MP_ACCESS_TOKEN, options: { timeout: 5000 } });
 
 // ==============================================================================
-// 💰 FUNÇÕES DE PAGAMENTO (BLINDADAS)
+// 💰 FUNÇÕES DE PAGAMENTO (V7.3 - Link Ajustado)
 // ==============================================================================
 
 async function gerarPix(valor, clienteNome, clienteTelefone) {
   try {
     const payment = new Payment(client);
-    
-    // TRUQUE ANTI-BLOQUEIO
     const emailAleatorio = `comprador.marmita.${Date.now()}@gmail.com`;
     const telefoneLimpo = String(clienteTelefone).replace(/\D/g, '');
 
@@ -84,7 +88,6 @@ async function gerarPix(valor, clienteNome, clienteTelefone) {
       copiaCola: response.point_of_interaction.transaction_data.qr_code,
       idPagamento: response.id
     };
-
   } catch (error) {
     console.error('❌ ERRO PIX:', JSON.stringify(error, null, 2));
     return null;
@@ -115,6 +118,15 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
 
     const body = {
       items: itemsPreference,
+      // --- CONFIGURAÇÃO PARA FORÇAR APROVAÇÃO E MOSTRAR CARTÃO ---
+      binary_mode: true, // Aprova na hora ou recusa (sem pendente)
+      payment_methods: {
+        excluded_payment_types: [
+            { id: "ticket" } // Remove Boleto (pra não confundir)
+        ],
+        installments: 12 // Permite parcelar
+      },
+      // -----------------------------------------------------------
       notification_url: `${URL_DO_SEU_SITE}/webhook`,
       external_reference: telefoneLimpo,
       payer: {
@@ -233,7 +245,7 @@ async function enviarMensagemWA(numero, texto) {
 // 🚀 ROTAS
 // ==============================================================================
 
-app.get('/', (req, res) => { res.send('🤖 Bot V7.2 (Anti-Loop) ON 🚀'); });
+app.get('/', (req, res) => { res.send('🤖 Bot V7.3 (Link Ajustado) ON 🚀'); });
 
 app.post('/mensagem', async (req, res) => {
   try {
@@ -246,7 +258,6 @@ app.post('/mensagem', async (req, res) => {
     const remoteJid = dadosMensagem.key?.remoteJid || "";
     const fromMe = dadosMensagem.key?.fromMe;
     
-    // FILTRO IMPORTANTE: Evita loop com mensagens do sistema
     if (remoteJid.includes('status') || remoteJid.includes('@g.us') || fromMe === true) {
       return res.status(200).json({ ok: true });
     }
@@ -263,7 +274,7 @@ app.post('/mensagem', async (req, res) => {
     cliente.ultimoContato = Date.now();
     let resposta = '';
 
-    console.log(`📩 Cliente ${numero} mandou: "${mensagem}" (Estado: ${cliente.estado})`);
+    console.log(`📩 Cliente ${numero}: "${mensagem}"`);
 
     // 1. SAUDAÇÃO
     if (!cliente.recebeuSaudacao) {
