@@ -13,7 +13,7 @@ app.use(express.urlencoded({ extended: true }));
 const TEMPO_INATIVO = 10 * 60 * 1000; // 10 minutos
 
 // ⚠️⚠️ COLOQUE SEU NÚMERO AQUI (Com 55 e DDD) ⚠️⚠️
-const NUMERO_ADMIN = '5551999999999'; 
+const NUMERO_ADMIN = '5551984050946'; 
 
 // Objeto para guardar os Cronômetros de cada cliente
 const timersClientes = {};
