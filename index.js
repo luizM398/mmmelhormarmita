@@ -191,125 +191,94 @@ app.post('/webhook', async (req, res) => {
        if (pagamentoInfo.status === 'approved') {
          const numeroCliente = pagamentoInfo.external_reference; 
          const valorPago = pagamentoInfo.transaction_amount;
-         
-         const agora = new Date();
-         const dataFormatada = agora.toLocaleDateString('pt-BR');
-         const horaFormatada = agora.toLocaleTimeString('pt-BR').substring(0,5);
-
          const memoria = clientes[numeroCliente];
          
-         let nomeCliente = "Cliente";
-         let resumoItens = "";     
-         let resumoItensAdmin = ""; 
-         let valorFrete = "0.00";
-         let endereco = "Endereço via CEP";
-         let subtotalVal = 0;
-
          if (memoria) {
              memoria.estado = 'FINALIZADO';
-             nomeCliente = memoria.nome || "Cliente";
-             if (memoria.valorFrete) valorFrete = memoria.valorFrete.toFixed(2);
-             if (memoria.endereco) endereco = memoria.endereco;
+             let resumoItens = "";     
+             let resumoItensAdmin = ""; 
+             let subtotalVal = 0;
 
-             if (memoria.pedido && memoria.pedido.length > 0) {
-                 memoria.pedido.forEach(item => {
-                     let nomePrato = item.prato;
-                     let nomeTecnico = item.prato;
+             memoria.pedido.forEach(item => {
+                 let nomeExibicao = item.prato;
 
-                     // ✅ REGRA 1: SÓ MOSTRA SE FOR INTEGRAL OU LIGHT
-                     if (item.arroz === 'Integral') { 
-                        nomePrato += ` (Integral)`; 
-                        nomeTecnico += ` / Integral`; 
-                     }
-                     if (item.strogonoff === 'Light') { 
-                        nomePrato += ` (Light)`; 
-                        nomeTecnico += ` / Light`; 
-                     }
-                     // Se for Branco ou Tradicional, não adiciona nada no nome.
+                 // ✅ NOMENCLATURA INTELIGENTE (Substituição no meio da frase)
+                 if (item.arroz === 'Integral') {
+                     nomeExibicao = nomeExibicao.replace(/arroz/gi, 'arroz INTEGRAL');
+                 }
+                 if (item.strogonoff === 'Light') {
+                     nomeExibicao = nomeExibicao.replace(/strogonoff/gi, 'strogonoff LIGHT');
+                 }
 
-                     const precoItem = item.quantidade >= 5 ? 0.01 : 0.05; // TESTE
-                     const totalItem = item.quantidade * precoItem;
-                     subtotalVal += totalItem;
+                 const precoItem = item.quantidade >= 5 ? 0.01 : 0.05;
+                 const totalItem = item.quantidade * precoItem;
+                 subtotalVal += totalItem;
 
-                     // ✅ REGRA 2: QUEBRA DE LINHA INTELIGENTE
-                     const qtdStr = (item.quantidade + 'x').padEnd(3);
-                     const totalStr = padL('R$ ' + totalItem.toFixed(2), 8);
-                     
-                     // Limite de caracteres por linha antes de quebrar
-                     const limiteChar = 22; 
+                 // FORMATAÇÃO DO CUPOM (Nota Fiscal alinhada)
+                 const qtdStr = (item.quantidade + 'x').padEnd(3);
+                 const totalStr = padL('R$ ' + totalItem.toFixed(2), 8);
+                 const limiteChar = 25; 
 
-                     if (nomePrato.length <= limiteChar) {
-                         // Nome curto: 1 linha
-                         const descStr = pad(nomePrato, 22);
-                         resumoItens += `${qtdStr} ${descStr} ${totalStr}\n`;
-                     } else {
-                         // Nome longo: 2 linhas
-                         // Tenta cortar no último espaço antes do limite para não cortar palavra
-                         let corte = nomePrato.lastIndexOf(' ', limiteChar);
-                         if (corte === -1) corte = limiteChar; // Se não tiver espaço, corta na força bruta
+                 if (nomeExibicao.length <= limiteChar) {
+                     resumoItens += `${qtdStr} ${pad(nomeExibicao, 25)} ${totalStr}\n`;
+                 } else {
+                     let corte = nomeExibicao.lastIndexOf(' ', limiteChar);
+                     if (corte === -1) corte = limiteChar;
+                     resumoItens += `${qtdStr} ${nomeExibicao.substring(0, corte)}\n`;
+                     resumoItens += `    ${pad(nomeExibicao.substring(corte + 1), 25)} ${totalStr}\n`;
+                 }
 
-                         const linha1 = nomePrato.substring(0, corte);
-                         const linha2 = nomePrato.substring(corte + 1); // Restante
-                         
-                         resumoItens += `${qtdStr} ${linha1}\n`; // Linha 1
-                         resumoItens += `    ${pad(linha2, 22)} ${totalStr}\n`; // Linha 2 (indentado + preço)
-                     }
+                 // DEDO DURO (ADMIN) ATUALIZADO COM OS NOMES NOVOS
+                 resumoItensAdmin += `▪️ ${item.quantidade}x ${nomeExibicao}\n`;
+             });
 
-                     // Admin recebe simplificado
-                     resumoItensAdmin += `▪️ ${item.quantidade}x ${nomeTecnico}\n`;
-                 });
-             }
-         }
+             const dataBr = new Date().toLocaleDateString('pt-BR');
+             const horaBr = new Date().toLocaleTimeString('pt-BR').substring(0,5);
 
-         console.log(`✅ Pagamento Aprovado! Cliente: ${numeroCliente}`);
-         
-         const comprovanteCliente = 
+             const cupomCliente = 
 `\`\`\`
-🧾 MELHOR MARMITA - PEDIDO #${data.id.slice(-4)}
+       🧾  MELHOR MARMITA  🍱
+     CUPOM DE PEDIDO: #${data.id.slice(-4)}
 --------------------------------------
-📅 ${dataFormatada} - ${horaFormatada}
-👤 ${nomeCliente.toUpperCase()}
-🚚 Entrega: 3 a 5 dias úteis
+CLIENTE: ${memoria.nome.toUpperCase()}
+DATA: ${dataBr} - ${horaBr}
 --------------------------------------
-QTD DESCRIÇÃO              TOTAL
+ITEM                      QTD    VALOR
+--------------------------------------
 ${resumoItens}
 --------------------------------------
-SUBTOTAL:             R$ ${subtotalVal.toFixed(2)}
-FRETE:                R$ ${valorFrete}
-TOTAL FINAL:          R$ ${valorPago.toFixed(2)}
+SUBTOTAL:                 R$ ${subtotalVal.toFixed(2)}
+FRETE:                    R$ ${memoria.valorFrete.toFixed(2)}
 --------------------------------------
-📍 ENTREGA:
-${endereco}
+TOTAL PAGO:               R$ ${valorPago.toFixed(2)}
 --------------------------------------
-✅ PAGAMENTO APROVADO
+✅  PAGAMENTO CONFIRMADO
+    OBRIGADO PELA PREFERÊNCIA!
 \`\`\``;
 
-         const msgAdmin = 
+             const msgAdmin = 
 `🔔 *NOVO PEDIDO PAGO!* 👨‍🍳🔥
 --------------------------------
-👤 *CLIENTE:* ${nomeCliente}
+👤 *CLIENTE:* ${memoria.nome}
 📞 *CONTATO:* wa.me/${numeroCliente}
-🆔 *ID:* ${data.id}
---------------------------------
-📍 *ENDEREÇO DE ENTREGA:*
-${endereco}
+📍 *ENTREGA:* ${memoria.endereco}
 --------------------------------
 📦 *ITENS:*
 ${resumoItensAdmin}
-🚚 Frete: R$ ${valorFrete}
---------------------------------
+🚚 Frete: R$ ${memoria.valorFrete.toFixed(2)}
 💰 *TOTAL DA VENDA: R$ ${valorPago.toFixed(2)}*
 --------------------------------
-✅ *Status:* PIX OK`;
+✅ *Status:* PAGO`;
 
-         await enviarMensagemWA(numeroCliente, `Aqui está seu comprovante detalhado:`);
-         await enviarMensagemWA(numeroCliente, comprovanteCliente);
-         await enviarMensagemWA(numeroCliente, `Muito obrigado, ${nomeCliente}! Já enviamos para a cozinha. 👨‍🍳🔥`);
-         await enviarMensagemWA(NUMERO_ADMIN, msgAdmin);
+             await enviarMensagemWA(numeroCliente, `Aqui está seu comprovante detalhado:`);
+             await enviarMensagemWA(numeroCliente, cupomCliente);
+             await enviarMensagemWA(numeroCliente, `Muito obrigado, ${memoria.nome}! Já enviamos para a cozinha. 🍱🔥`);
+             await enviarMensagemWA(NUMERO_ADMIN, msgAdmin);
+         }
        }
      } catch (error) { console.error("Erro Webhook:", error); }
   }
-  res.status(200).send('OK');
+  res.sendStatus(200);
 });
 
 // ==============================================================================
