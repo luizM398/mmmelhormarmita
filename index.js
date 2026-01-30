@@ -220,15 +220,15 @@ function calcularFrete(textoEndereco) {
   
   // ZONA LOCAL (R$ 8,00)
   const zonaLocal = ['lomba do pinheiro', 'lomba', 'agronomia', 'parada', 'pda', 'joao de oliveira', 'mapa', 'vilela', 'sao pedro'];
-  if (contem(zonaLocal)) return { valor: 8.00, texto: "R$ 8,00" };
+  if (contem(zonaLocal)) return { valor: 0,01, texto: "R$ 0,01" };
 
   // ZONA ALVO (R$ 20,00)
   const zonaAlvo = ['bela vista', 'moinhos', 'mont serrat', 'auxiliadora', 'rio branco', 'petropolis', 'chacara das pedras', 'tres figueiras'];
-  if (contem(zonaAlvo)) return { valor: 20.00, texto: "R$ 20,00" };
+  if (contem(zonaAlvo)) return { valor: 0,03, texto: "R$ 0,03" };
 
   // ZONA INTERMEDIÁRIA (R$ 15,00)
   const zonaMedia = ['restinga', 'partenon', 'bento', 'jardim botanico', 'santana', 'sao jose', 'ipiranga', 'intercap'];
-  if (contem(zonaMedia)) return { valor: 15.00, texto: "R$ 15,00" };
+  if (contem(zonaMedia)) return { valor: 0,02, texto: "R$ 0,02" };
 
   return null; 
 }
