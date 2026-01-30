@@ -116,22 +116,22 @@ async function calcularFreteGoogle(cepDestino) {
     
     // Até 3km -> R$ 5,00 (Local / Vizinhos)
     if (distanciaKm <= 3.0) {
-      return { valor: 1,00, texto: "R$ 1,00", endereco: enderecoGoogle, km: distanciaKm };
+      return { valor: 1.00, texto: "R$ 1.00", endereco: enderecoGoogle, km: distanciaKm };
     }
 
     // De 3km até 6km -> R$ 8,00 (Agronomia, Pontas da Lomba)
     if (distanciaKm <= 6.0) {
-      return { valor: 1,01, texto: "R$ 1,01", endereco: enderecoGoogle, km: distanciaKm };
+      return { valor: 1.01, texto: "R$ 1.01", endereco: enderecoGoogle, km: distanciaKm };
     }
 
     // De 6km até 15km -> R$ 15,00 (Partenon, Restinga, São José)
     if (distanciaKm <= 15.0) {
-      return { valor: 1,02, texto: "R$ 1,02", endereco: enderecoGoogle, km: distanciaKm };
+      return { valor: 1.02, texto: "R$ 1.02", endereco: enderecoGoogle, km: distanciaKm };
     }
 
     // De 15km até 20km -> R$ 20,00 (Zona Nobre / Longe)
     if (distanciaKm <= 20.0) {
-      return { valor: 1,03, texto: "R$ 1,03", endereco: enderecoGoogle, km: distanciaKm };
+      return { valor: 1.03, texto: "R$ 1.03", endereco: enderecoGoogle, km: distanciaKm };
     }
 
     // Acima de 20km -> BLOQUEADO 🚫
@@ -187,7 +187,7 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
       title: `${item.prato} (Delivery)`,
       quantity: parseInt(item.quantidade),
       currency_id: 'BRL',
-      unit_price: item.quantidade >= 5 ? 0,01 : 0,05 
+      unit_price: item.quantidade >= 5 ? 0.01 : 0.05 
     }));
 
     if (frete > 0) {
@@ -428,7 +428,7 @@ app.post('/mensagem', async (req, res) => {
       const prato = cliente.opcoesPrato[escolha - 1];
       const nomePrato = prato.PRATO.toLowerCase();
       
-      cliente.pedido.push({ prato: prato.PRATO, valor: 0,01, arroz: null, strogonoff: null, quantidade: 0 });
+      cliente.pedido.push({ prato: prato.PRATO, valor: 0.05, arroz: null, strogonoff: null, quantidade: 0 });
       cliente.precisaArroz = nomePrato.includes('arroz');
       cliente.precisaStrogonoff = nomePrato.includes('strogonoff');
 
@@ -501,13 +501,13 @@ app.post('/mensagem', async (req, res) => {
       }
       if (mensagem === '2' || mensagem.includes('nao') || mensagem.includes('não')) {
         const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
-        let valorUnitario = 0,05;
-        let textoPreco = "R$ 0,05/un";
+        let valorUnitario = 0.05;
+        let textoPreco = "R$ 0.05/un";
         let msgPromo = "";
 
         if (totalMarmitas >= 5) {
-          valorUnitario = 0,01;
-          textoPreco = "~R$ 0,05~ por *R$ 0,01* a unidade";
+          valorUnitario = 0.01;
+          textoPreco = "~R$ 0.05~ por *R$ 0.01* a unidade";
           msgPromo = "🎉 *PARABÉNS! PROMOÇÃO APLICADA!* (Acima de 5 un)\n";
         }
 
@@ -548,7 +548,7 @@ app.post('/mensagem', async (req, res) => {
       cliente.endereco = `CEP: ${texto} (${frete.endereco})`; 
       
       const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
-      const valorUnitario = totalMarmitas >= 5 ? 0,01 : 0,05;
+      const valorUnitario = totalMarmitas >= 5 ? 0.01 : 0.05;
       const subtotalMarmitas = totalMarmitas * valorUnitario;
 
       const totalComFrete = subtotalMarmitas + frete.valor;
