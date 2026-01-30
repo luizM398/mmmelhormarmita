@@ -39,6 +39,24 @@ const estadoClientes = {
   }
 };
 
+// ==============================================================================
+// 🧹 FAXINA AUTOMÁTICA (12H INATIVIDADE)
+// ==============================================================================
+setInterval(() => {
+  const agora = Date.now();
+  const tempoLimite = 12 * 60 * 60 * 1000; // 12 horas
+  
+  // console.log('🧹 Faxina: Verificando memórias antigas...');
+  
+  Object.keys(clientes).forEach(numero => {
+    const cliente = clientes[numero];
+    // Só apaga se inativo > 12h E NÃO for pedido pago hoje
+    if ((agora - cliente.ultimoContato) > tempoLimite && cliente.estado !== 'FINALIZADO') {
+       delete clientes[numero];
+    }
+  });
+}, 60 * 60 * 1000); // Roda a cada 1 hora
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -46,12 +64,12 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ==============================================================================
-// ⚙️ ÁREA DE CONFIGURAÇÃO (SEUS DADOS REAIS + MODO TESTE)
+// ⚙️ ÁREA DE CONFIGURAÇÃO (MODO TESTE 🧪)
 // ==============================================================================
 
 const NUMERO_ADMIN = '5551984050946'; 
 
-// SEUS TOKENS (Mantidos do arquivo enviado)
+// SEUS TOKENS REAIS
 const MP_ACCESS_TOKEN = 'APP_USR-3976540518966482-012110-64c2873d7929c168846b389d4f6c311e-281673709'; 
 const WASENDER_TOKEN = process.env.WASENDER_TOKEN || '399f73920f6d3300e39fc9f8f0e34eb40510a8a14847e288580d5d10e40cdae4'; 
 const URL_DO_SEU_SITE = 'https://mmmelhormarmita.onrender.com';
@@ -59,7 +77,7 @@ const URL_DO_SEU_SITE = 'https://mmmelhormarmita.onrender.com';
 // 🔑 SUA CHAVE DO GOOGLE MAPS
 const GOOGLE_API_KEY = 'AIzaSyAc6xZjyQRgBS52UfOKc93PthX9HlMMqHw'; 
 
-// SEU ENDEREÇO (Ajustado com o CEP do arquivo)
+// SEU ENDEREÇO
 const ORIGEM_COZINHA = 'Rua Guaíba, 10 - CEP 91560-640, Lomba do Pinheiro, Porto Alegre, RS';
 
 // ==============================================================================
@@ -106,9 +124,8 @@ async function calcularFreteGoogle(cepDestino) {
     console.log(`📏 Distância encontrada: ${distanciaKm.toFixed(2)} km`);
 
     // =======================================================================
-    // 🧪 TABELA DE PREÇOS DE TESTE (CENTAVOS PARA TESTAR MAPAS)
+    // 🧪 TABELA DE PREÇOS DE TESTE (CENTAVOS)
     // =======================================================================
-    
     if (distanciaKm <= 3.0) return { valor: 0.01, texto: "R$ 0,01 (Teste Perto)", endereco: enderecoGoogle, km: distanciaKm };
     if (distanciaKm <= 6.0) return { valor: 0.02, texto: "R$ 0,02 (Teste Médio)", endereco: enderecoGoogle, km: distanciaKm };
     if (distanciaKm <= 15.0) return { valor: 0.03, texto: "R$ 0,03 (Teste Longe)", endereco: enderecoGoogle, km: distanciaKm };
@@ -123,7 +140,7 @@ async function calcularFreteGoogle(cepDestino) {
 }
 
 // ==============================================================================
-// 💰 FUNÇÕES DE PAGAMENTO (PREÇOS DE TESTE)
+// 💰 FUNÇÕES DE PAGAMENTO (TESTE)
 // ==============================================================================
 
 async function gerarPix(valor, clienteNome, clienteTelefone) {
@@ -134,7 +151,7 @@ async function gerarPix(valor, clienteNome, clienteTelefone) {
 
     const body = {
       transaction_amount: parseFloat(valor.toFixed(2)),
-      description: `Pedido Marmita - ${clienteNome}`, // Nome no extrato
+      description: `Pedido Marmita - ${clienteNome}`, 
       payment_method_id: 'pix',
       notification_url: `${URL_DO_SEU_SITE}/webhook`, 
       external_reference: telefoneLimpo, 
@@ -166,7 +183,6 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
       title: `${item.prato} (TESTE)`,
       quantity: parseInt(item.quantidade),
       currency_id: 'BRL',
-      // PREÇO DE TESTE (0.01 ou 0.05)
       unit_price: item.quantidade >= 5 ? 0.01 : 0.05 
     }));
 
@@ -198,13 +214,13 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
 }
 
 // ==============================================================================
-// 🖨️ GERADOR DE NOTA FISCAL (LAYOUT CUPOM)
+// 🖨️ AUXILIARES DE FORMATAÇÃO
 // ==============================================================================
 function pad(str, length) { return (str + '                                        ').substring(0, length); }
 function padL(str, length) { return ('                                        ' + str).slice(-length); }
 
 // ==============================================================================
-// 🔔 WEBHOOK (V13.2 - SEM DISTÂNCIA VISÍVEL + TRAVA + ENDEREÇO FULL)
+// 🔔 WEBHOOK (V15 - CUPOM CLIENTE + DEDO DURO ADMIN)
 // ==============================================================================
 
 app.post('/webhook', async (req, res) => {
@@ -225,14 +241,14 @@ app.post('/webhook', async (req, res) => {
          const memoria = clientes[numeroCliente];
          
          let nomeCliente = "Cliente";
-         let resumoItens = "";
+         let resumoItens = "";     // Cupom Cliente
+         let resumoItensAdmin = ""; // Ficha Técnica Admin
          let valorFrete = "0.00";
          let endereco = "Endereço via CEP";
          let subtotalVal = 0;
 
          if (memoria) {
-             // 🔒 TRAVA DE SEGURANÇA: CLIENTE PAGO
-             memoria.estado = 'FINALIZADO'; 
+             memoria.estado = 'FINALIZADO'; // 🔒 TRAVA
              
              nomeCliente = memoria.nome || "Cliente";
              if (memoria.valorFrete) valorFrete = memoria.valorFrete.toFixed(2);
@@ -241,27 +257,37 @@ app.post('/webhook', async (req, res) => {
              if (memoria.pedido && memoria.pedido.length > 0) {
                  memoria.pedido.forEach(item => {
                      let nomePrato = item.prato;
-                     if (item.arroz === 'Branco') nomePrato += " (B)";
-                     if (item.arroz === 'Integral') nomePrato += " (Int)";
-                     if (item.strogonoff === 'Tradicional') nomePrato += " (Trad)";
-                     if (item.strogonoff === 'Light') nomePrato += " (Lgt)";
+                     let nomeTecnico = item.prato;
+
+                     if (item.arroz) { 
+                        nomePrato += ` (${item.arroz})`; 
+                        nomeTecnico += ` | Arr: ${item.arroz}`; 
+                     }
+                     if (item.strogonoff) { 
+                        nomePrato += ` (${item.strogonoff})`; 
+                        nomeTecnico += ` | Strog: ${item.strogonoff}`;
+                     }
 
                      const precoItem = item.quantidade >= 5 ? 0.01 : 0.05; // TESTE
                      const totalItem = item.quantidade * precoItem;
                      subtotalVal += totalItem;
 
+                     // Cliente (Bonito)
                      const qtdStr = (item.quantidade + 'x').padEnd(3);
                      const descStr = pad(nomePrato.substring(0, 18), 18); 
                      const totalStr = padL('R$ ' + totalItem.toFixed(2), 8);
-
                      resumoItens += `${qtdStr} ${descStr} ${totalStr}\n`;
+
+                     // Admin (Simples e Direto)
+                     resumoItensAdmin += `▪️ ${item.quantidade}x ${nomeTecnico} - R$ ${totalItem.toFixed(2)}\n`;
                  });
              }
          }
 
          console.log(`✅ Pagamento Aprovado! Cliente: ${numeroCliente}`);
          
-         const comprovante = 
+         // 1. CUPOM PARA O CLIENTE (LIMPO)
+         const comprovanteCliente = 
 `\`\`\`
 🧾 MELHOR MARMITA - PEDIDO #${data.id.slice(-4)}
 --------------------------------
@@ -279,14 +305,35 @@ TOTAL FINAL:       R$ ${valorPago.toFixed(2)}
 📍 ENTREGA:
 ${endereco}
 --------------------------------
-ID TRANS: ${data.id}
 ✅ PAGAMENTO APROVADO
 \`\`\``;
 
+         // 2. DEDO DURO PARA VOCÊ (DADOS TÉCNICOS)
+         const msgAdmin = 
+`🔔 *NOVO PEDIDO PAGO!* 👨‍🍳🔥
+--------------------------------
+👤 *CLIENTE:* ${nomeCliente}
+📞 *CONTATO:* wa.me/${numeroCliente}
+🆔 *ID:* ${data.id}
+--------------------------------
+📍 *ENDEREÇO DE ENTREGA:*
+${endereco}
+--------------------------------
+📦 *ITENS:*
+${resumoItensAdmin}
+🚚 Frete: R$ ${valorFrete}
+--------------------------------
+💰 *TOTAL DA VENDA: R$ ${valorPago.toFixed(2)}*
+--------------------------------
+✅ *Status:* PIX OK`;
+
+         // Envia para o Cliente
          await enviarMensagemWA(numeroCliente, `Aqui está seu comprovante detalhado:`);
-         await enviarMensagemWA(numeroCliente, comprovante);
+         await enviarMensagemWA(numeroCliente, comprovanteCliente);
          await enviarMensagemWA(numeroCliente, `Muito obrigado, ${nomeCliente}! Já enviamos para a cozinha. 👨‍🍳🔥`);
-         await enviarMensagemWA(NUMERO_ADMIN, `🔔 *NOVA VENDA CONFIRMADA*\nCliente: ${nomeCliente}\nValor: R$ ${valorPago.toFixed(2)}`);
+         
+         // Envia para o Admin
+         await enviarMensagemWA(NUMERO_ADMIN, msgAdmin);
        }
      } catch (error) {
        console.error("Erro Webhook:", error);
@@ -343,7 +390,7 @@ async function enviarMensagemWA(numero, texto) {
 // 🚀 ROTAS (LÓGICA PRINCIPAL)
 // ==============================================================================
 
-app.get('/', (req, res) => { res.send('🤖 Bot V13.2 (CLEAN + BLINDADO) ON 🚀'); });
+app.get('/', (req, res) => { res.send('🤖 Bot V15 (FINAL - HORA/MAPS/FAXINA) ON 🚀'); });
 
 app.post('/mensagem', async (req, res) => {
   try {
@@ -366,6 +413,25 @@ app.post('/mensagem', async (req, res) => {
 
     if (!texto || !numero) return res.status(200).json({ ok: true });
     const mensagem = texto.trim().toLowerCase();
+    
+    // ========================================================================
+    // ⏰ VERIFICAÇÃO DE HORÁRIO (SEG-SEX, 08h-18h)
+    // ========================================================================
+    // Pega a hora atual no fuso do Brasil (Importante para o Render)
+    const dataBrasil = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Sao_Paulo"}));
+    const diaSemana = dataBrasil.getDay(); // 0 = Dom, 6 = Sab
+    const horaAtual = dataBrasil.getHours(); // 0 a 23
+
+    // Se for Sábado(6) ou Domingo(0) OU se for antes das 8h ou depois das 18h
+    if ((diaSemana === 0 || diaSemana === 6) || (horaAtual < 8 || horaAtual >= 18)) {
+       // Permite apenas o ADMIN acessar fora de hora para testes
+       if (numero !== NUMERO_ADMIN) {
+         await enviarMensagemWA(numero, `🚫 *Olá! A Melhor Marmita está fechada agora.*\n\n⏰ Nosso horário de atendimento é:\nSegunda a Sexta, das 08h às 18h.\n\nEsperamos seu contato no horário comercial! 👋`);
+         return res.status(200).json({ ok: true });
+       }
+    }
+    // ========================================================================
+
     iniciarTimerInatividade(numero);
     
     const cliente = estadoClientes.getEstado(numero);
@@ -609,7 +675,7 @@ app.post('/mensagem', async (req, res) => {
       cliente.totalFinal = totalComFrete;
       cliente.estado = 'CONFIRMANDO_ENDERECO_COMPLEMENTO';
       
-      // ✅ RESPOSTA LIMPA (SEM DISTÂNCIA TÉCNICA)
+      // ✅ RESPOSTA LIMPA (SEM DISTÂNCIA TÉCNICA VISÍVEL)
       resposta = `✅ *Localizado!*\n📍 ${frete.endereco}\n🚚 Frete: *${textoFrete}*\n\n${cliente.nome}, por favor digite o *NÚMERO DA CASA* e *COMPLEMENTO*:`;
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
