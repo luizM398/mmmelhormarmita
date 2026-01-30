@@ -5,7 +5,7 @@ const axios = require('axios');
 const { MercadoPagoConfig, Payment, Preference } = require('mercadopago');
 
 // ==============================================================================
-// 🧠 MEMÓRIA DO ROBÔ (Versão Final)
+// 🧠 MEMÓRIA DO ROBÔ (Gerenciamento de Estado)
 // ==============================================================================
 const clientes = {};
 
@@ -48,9 +48,15 @@ app.use(express.urlencoded({ extended: true }));
 // ==============================================================================
 
 const NUMERO_ADMIN = '5551984050946'; 
-const MP_ACCESS_TOKEN = 'APP_USR-3976540518966482-012110-64c2873d7929c168846b389d4f6c311e-281673709'; // <--- COLOQUE SEU TOKEN AQUI
-const WASENDER_TOKEN = process.env.WASENDER_TOKEN || '399f73920f6d3300e39fc9f8f0e34eb40510a8a14847e288580d5d10e40cdae4'; 
-const URL_DO_SEU_SITE = 'https://mmmelhormarmita.onrender.com'; 
+
+// 1. SEU TOKEN DO MERCADO PAGO
+const MP_ACCESS_TOKEN = 'APP_USR-SEU-TOKEN-GIGANTE-AQUI'; 
+
+// 2. SEU TOKEN DO WASENDER
+const WASENDER_TOKEN = process.env.WASENDER_TOKEN || 'SUA_CHAVE_WASENDER_AQUI'; 
+
+// 3. SEU LINK DO RENDER (SEM BARRA NO FINAL)
+const URL_DO_SEU_SITE = 'https://SEU-APP.onrender.com'; 
 
 // ==============================================================================
 
@@ -60,13 +66,136 @@ const timersClientes = {};
 const client = new MercadoPagoConfig({ accessToken: MP_ACCESS_TOKEN, options: { timeout: 5000 } });
 
 // ==============================================================================
-// 💰 FUNÇÕES DE PAGAMENTO (VALORES REAIS)
+// 🚚 INTELIGÊNCIA DE FRETE (SUPER EXPANDIDA)
+// ==============================================================================
+
+function calcularFrete(textoEndereco) {
+  // Limpeza: remove acentos, deixa minúsculo e remove caracteres especiais
+  const endereco = textoEndereco.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "");
+  
+  const contem = (lista) => lista.some(termo => endereco.includes(termo));
+
+  // ---------------------------------------------------------------------------
+  // 🚫 ZONA BLOQUEADA (Longe demais / Fora de mão)
+  // ---------------------------------------------------------------------------
+  const zonaBloqueada = [
+      // Zona Sul Profunda
+      'belem novo', 'lami', 'ponta grossa', 'chapeu do sol', 'hipica', 'aberta dos morros', 
+      'campo novo', 'belem velho', 'cascata', 'serraria', 'guaruja', 'espirito santo', 
+      'ipanema', 'tristeza', 'cristal', 'cavalhada', 'nonoai', 'teresopolis', 'gloria', 
+      'vila nova', 'vl nova',
+      
+      // Zona Norte Profunda / Industrial
+      'sarandi', 'rubem berta', 'humaita', 'navegantes', 'farrapos', 'sao geraldo', 'anchieta',
+      'passo d areia', 'passo da areia', 'cristo redentor', 'lindoia', 'sao sebastiao', 
+      'jardim itu', 'jardim planalto', 'itu sabara',
+      
+      // Centro (Estacionamento difícil)
+      'centro historico', 'centro', 'floresta', 'independencia', 'bom fim', 'bonfim',
+      
+      // Cidades Vizinhas
+      'viamao', 'alvorada', 'canoas', 'cachoeirinha', 'gravatai', 'guaiba', 'eldorado'
+  ];
+
+  if (contem(zonaBloqueada) && !endereco.includes('restinga')) {
+      return { erro: true, msg: "Desculpe mas infelizmente a Melhor Marmita, ainda não atende este bairro." };
+  }
+
+  // ---------------------------------------------------------------------------
+  // 🟢 GRUPO 1: SUPER LOCAL - R$ 5,00
+  // (Lomba "Raiz" e vizinhos diretos)
+  // ---------------------------------------------------------------------------
+  const zonaSuperLocal = [
+      // Lomba Genérica
+      'lomba do pinheiro', 'l pinheiro', 'l. pinheiro', 'lomba', 'pinheiro',
+      
+      // São Pedro
+      'sao pedro', 's pedro', 's. pedro', 'vl sao pedro', 'vila sao pedro', 'sao. pedro',
+      
+      // Vilela
+      'vilela', 'vilella', 'villela', 'vl vilela', 'parada 6', 'pda 6', 'parada 7', 'pda 7',
+      
+      // Bonsucesso
+      'bonsucesso', 'b sucesso', 'b. sucesso', 'bom sucesso', 'bonsuceso', 
+      'bonçucesso', 'bomçucesso', 'bonsuseço', 'bomsucesso', 'parada 5', 'pda 5',
+      
+      // Panorama
+      'panorama', 'panorana', 'pamorana', 'pamorama', 'panaroma', 'parada 16', 'pda 16',
+      
+      // Vila Mapa
+      'mapa', 'vila mapa', 'v mapa', 'v. mapa', 'vl mapa', 'parada 2', 'pda 2', 'parada 3', 'pda 3'
+  ];
+  if (contem(zonaSuperLocal)) return { valor: 5.00, texto: "R$ 5,00" };
+
+  // ---------------------------------------------------------------------------
+  // 🟡 GRUPO 2: VIZINHO - R$ 8,00
+  // (Pontas da Lomba ou saída imediata)
+  // ---------------------------------------------------------------------------
+  const zonaVizinha = [
+      // Quinta do Portal
+      'quinta do portal', 'q portal', 'q. portal', 'q do portal', 'portal', 'parada 19', 'pda 19',
+      
+      // Agronomia
+      'agronomia', 'agro', 'campus', 'ufrgs', 'unipampa'
+  ];
+  if (contem(zonaVizinha)) return { valor: 8.00, texto: "R$ 8,00" };
+
+  // ---------------------------------------------------------------------------
+  // 🔵 GRUPO 3: MÉDIA/CIDADE - R$ 15,00
+  // (Rota Bento/Ipiranga e Restinga)
+  // ---------------------------------------------------------------------------
+  const zonaMedia = [
+      'restinga', 'rest', // Você confirmou que atende
+      'jardim carvalho', 'jd carvalho', 'carvalho',
+      'jardim do salso', 'jd salso', 'salso',
+      'partenon', 'partenom', 'partnon',
+      'bento', 'av bento', 
+      'sao jose', 'sao. jose', 's jose', 's. jose',
+      'jardim botanico', 'jd botanico', 'botanico', 
+      'santana', 'satana',
+      'ipiranga', 'av ipiranga',
+      'intercap', 
+      'azenha', 
+      'santo antonio', 'sto antonio',
+      'vila jardim', 'vl jardim', 'bom jesus'
+  ];
+  if (contem(zonaMedia)) return { valor: 15.00, texto: "R$ 15,00" };
+
+  // ---------------------------------------------------------------------------
+  // 🟣 GRUPO 4: NOBRE - R$ 20,00
+  // (Até 18km - Ticket alto)
+  // ---------------------------------------------------------------------------
+  const zonaNobre = [
+      'bela vista', 'bella vista', 
+      'moinhos de vento', 'moinhos', 
+      'mont serrat', 'mon serrat', 'monserrat', 
+      'auxiliadora', 
+      'rio branco', 
+      'petropolis', 
+      'chacara das pedras', 'chacaras', 
+      'tres figueiras', '3 figueiras', 
+      'boa vista', 
+      'higienopolis',
+      'menino deus', 
+      'cidade baixa', 'cb',
+      'santa cecilia', 'sta cecilia', 
+      'medianeira'
+  ];
+  if (contem(zonaNobre)) return { valor: 20.00, texto: "R$ 20,00" };
+
+  // ---------------------------------------------------------------------------
+  // 🔒 TRAVA DE SEGURANÇA (Retorna NULL se não achou nada conhecido)
+  // ---------------------------------------------------------------------------
+  return null; 
+}
+
+// ==============================================================================
+// 💰 FUNÇÕES DE PAGAMENTO (V10.0 - Valores Reais)
 // ==============================================================================
 
 async function gerarPix(valor, clienteNome, clienteTelefone) {
   try {
     const payment = new Payment(client);
-    // Mantemos a estratégia de e-mail único para evitar bloqueios do MP
     const emailAleatorio = `comprador.marmita.${Date.now()}@gmail.com`;
     const telefoneLimpo = String(clienteTelefone).replace(/\D/g, '');
 
@@ -104,8 +233,8 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
       title: `${item.prato} (Delivery)`,
       quantity: parseInt(item.quantidade),
       currency_id: 'BRL',
-      // PREÇO REAL APLICADO AQUI
-      unit_price: item.quantidade >= 5 ? 0,01 : 0,05 
+      // PREÇO REAL APLICADO AQUI (PRODUÇÃO)
+      unit_price: item.quantidade >= 5 ? 17.49 : 19.99 
     }));
 
     if (frete > 0) {
@@ -119,9 +248,9 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
 
     const body = {
       items: itemsPreference,
-      binary_mode: true, // Aprovação imediata
+      binary_mode: true, 
       payment_methods: {
-        excluded_payment_types: [{ id: "ticket" }], // Sem boleto
+        excluded_payment_types: [{ id: "ticket" }], 
         installments: 1
       },
       notification_url: `${URL_DO_SEU_SITE}/webhook`,
@@ -166,7 +295,7 @@ app.post('/webhook', async (req, res) => {
          const comprovante = `🧾 *COMPROVANTE DE PAGAMENTO*\n✅ *Status:* APROVADO\n💰 *Valor:* R$ ${valorPago.toFixed(2)}\n\nSeu pedido foi confirmado e enviado para a cozinha! 👨‍🍳🔥\nEm breve entraremos em contato para avisar sobre a entrega.`;
 
          await enviarMensagemWA(numeroCliente, comprovante);
-         await enviarMensagemWA(NUMERO_ADMIN, `🔔 *NOVO PAGAMENTO REAL!*\nCliente: ${numeroCliente}\nValor: R$ ${valorPago.toFixed(2)}\n(Verifique o MP para conferir)`);
+         await enviarMensagemWA(NUMERO_ADMIN, `🔔 *NOVO PAGAMENTO (V10)*\nCliente: ${numeroCliente}\nValor: R$ ${valorPago.toFixed(2)}`);
        }
      } catch (error) {
        console.error("Erro Webhook:", error);
@@ -212,27 +341,6 @@ function iniciarTimerInatividade(numero) {
   }, TEMPO_INATIVO);
 }
 
-function calcularFrete(textoEndereco) {
-  const endereco = textoEndereco.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, "");
-  const contem = (lista) => lista.some(termo => endereco.includes(termo));
-  const zonaBloqueada = ['hipica', 'belem novo', 'lami', 'sarandi', 'humaita', 'navegantes', 'centro historico', 'rubem berta', 'centro', 'viamao'];
-  if (contem(zonaBloqueada) && !endereco.includes('restinga')) return { erro: true, msg: "🚫 Desculpe, ainda não realizamos entregas nesta região." };
-  
-  // ZONA LOCAL (R$ 8,00)
-  const zonaLocal = ['lomba do pinheiro', 'lomba', 'agronomia', 'parada', 'pda', 'joao de oliveira', 'mapa', 'vilela', 'sao pedro'];
-  if (contem(zonaLocal)) return { valor: 0,01, texto: "R$ 0,01" };
-
-  // ZONA ALVO (R$ 20,00)
-  const zonaAlvo = ['bela vista', 'moinhos', 'mont serrat', 'auxiliadora', 'rio branco', 'petropolis', 'chacara das pedras', 'tres figueiras'];
-  if (contem(zonaAlvo)) return { valor: 0,03, texto: "R$ 0,03" };
-
-  // ZONA INTERMEDIÁRIA (R$ 15,00)
-  const zonaMedia = ['restinga', 'partenon', 'bento', 'jardim botanico', 'santana', 'sao jose', 'ipiranga', 'intercap'];
-  if (contem(zonaMedia)) return { valor: 0,02, texto: "R$ 0,02" };
-
-  return null; 
-}
-
 async function enviarMensagemWA(numero, texto) {
   const numeroLimpo = String(numero).replace(/\D/g, '');
   try {
@@ -244,10 +352,10 @@ async function enviarMensagemWA(numero, texto) {
 }
 
 // ==============================================================================
-// 🚀 ROTAS
+// 🚀 ROTAS (LÓGICA PRINCIPAL)
 // ==============================================================================
 
-app.get('/', (req, res) => { res.send('🤖 Bot V9.0 (PRODUÇÃO OFICIAL) ON 🚀'); });
+app.get('/', (req, res) => { res.send('🤖 Bot V10.0 (FINAL PRODUCTION) ON 🚀'); });
 
 app.post('/mensagem', async (req, res) => {
   try {
@@ -367,7 +475,7 @@ app.post('/mensagem', async (req, res) => {
       const prato = cliente.opcoesPrato[escolha - 1];
       const nomePrato = prato.PRATO.toLowerCase();
       // PREÇO BASE VISUAL (O real é calculado no final)
-      cliente.pedido.push({ prato: prato.PRATO, valor: 0,05, arroz: null, strogonoff: null, quantidade: 0 });
+      cliente.pedido.push({ prato: prato.PRATO, valor: 19.99, arroz: null, strogonoff: null, quantidade: 0 });
       cliente.precisaArroz = nomePrato.includes('arroz');
       cliente.precisaStrogonoff = nomePrato.includes('strogonoff');
 
@@ -442,13 +550,13 @@ app.post('/mensagem', async (req, res) => {
         const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
         
         // --- CÁLCULO DE VALOR REAL ---
-        let valorUnitario = 0,05;
-        let textoPreco = "R$ 0,05/un";
+        let valorUnitario = 19.99;
+        let textoPreco = "R$ 19,99/un";
         let msgPromo = "";
 
         if (totalMarmitas >= 5) {
-          valorUnitario = 0,01;
-          textoPreco = "~R$ 0,05~ por *R$ 0,01* a unidade";
+          valorUnitario = 17.49;
+          textoPreco = "~R$ 19,99~ por *R$ 17,49* a unidade";
           msgPromo = "🎉 *PARABÉNS! PROMOÇÃO APLICADA!* (Acima de 5 un)\n";
         }
         // -----------------------------
@@ -472,35 +580,39 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    // 6. FRETE E FECHAMENTO
+    // 6. FRETE E FECHAMENTO (COM TRAVA DE SEGURANÇA 🔒)
     if (cliente.estado === 'AGUARDANDO_ENDERECO') {
-      cliente.endereco = texto; 
+      
       const frete = calcularFrete(texto);
       
-      if (frete && frete.erro) { await enviarMensagemWA(numero, frete.msg); return res.status(200).json({ ok: true }); }
+      // CASO 1: É uma região bloqueada (Retorna texto específico)
+      if (frete && frete.erro) { 
+          await enviarMensagemWA(numero, frete.msg); 
+          return res.status(200).json({ ok: true }); 
+      }
+
+      // CASO 2: NÃO ENTENDEU O BAIRRO (Retorna texto específico)
+      if (!frete) {
+          await enviarMensagemWA(numero, `Desculpe, mas infelizmente não reconheci o seu bairro, pode digitar novamente seu endereço?\n\n(Dica: Tente escrever o nome do bairro de forma simples, ex: 'São Pedro', 'Lomba', 'Bonsucesso')`);
+          return res.status(200).json({ ok: true });
+      }
+
+      // CASO 3: DEU TUDO CERTO (Achou o bairro) ✅
+      if (!cliente.endereco) cliente.endereco = texto; 
+      else cliente.endereco += ` - ${texto}`; 
 
       const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
-      
-      // VALOR REAL FINAL
-      const valorUnitario = totalMarmitas >= 5 ? 0,01 : 0,05;
+      const valorUnitario = totalMarmitas >= 5 ? 17.49 : 19.99;
       const subtotalMarmitas = totalMarmitas * valorUnitario;
 
-      let totalComFrete = 0;
-      let textoFrete = "";
-      if (frete && !frete.erro) {
-         totalComFrete = subtotalMarmitas + frete.valor;
-         textoFrete = frete.texto;
-         cliente.valorFrete = frete.valor; 
-      } else {
-         totalComFrete = subtotalMarmitas; 
-         textoFrete = "A calcular (Atendente irá informar)";
-         cliente.valorFrete = 0;
-      }
+      const totalComFrete = subtotalMarmitas + frete.valor;
+      const textoFrete = frete.texto;
+      cliente.valorFrete = frete.valor; 
 
       cliente.totalFinal = totalComFrete;
       cliente.estado = 'ESCOLHENDO_PAGAMENTO';
       
-      resposta = `✅ *Endereço Recebido!*\n\n📝 *Fechamento da Conta:*\nSubtotal Comida: R$ ${subtotalMarmitas.toFixed(2)}\nFrete: ${textoFrete}\n💰 *TOTAL: R$ ${totalComFrete.toFixed(2)}*\n\n🚚 *Entrega prevista: de 3 a 5 dias* (Sob encomenda)\n\n💳 *Como deseja pagar?*\n1️⃣ PIX (Aprovação Imediata)\n2️⃣ Cartão de Crédito/Débito (Link)`;
+      resposta = `✅ *Bairro Identificado!*\n\n📝 *Fechamento da Conta:*\nSubtotal Comida: R$ ${subtotalMarmitas.toFixed(2)}\nFrete: ${textoFrete}\n💰 *TOTAL: R$ ${totalComFrete.toFixed(2)}*\n\n🚚 *Entrega prevista: de 3 a 5 dias* (Sob encomenda)\n\n💳 *Como deseja pagar?*\n1️⃣ PIX (Aprovação Imediata)\n2️⃣ Cartão de Crédito/Débito (Link)`;
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
       return res.status(200).json({ ok: true });
