@@ -369,7 +369,7 @@ app.post('/mensagem', async (req, res) => {
     const diaSemana = dataBrasil.getDay(); 
     const horaAtual = dataBrasil.getHours();
 
-    if (horaAtual < 8 || horaAtual >= 22)) {
+    if (horaAtual < 8 || horaAtual >= 22) {
        if (numero !== NUMERO_ADMIN) {
          await enviarMensagemWA(numero, `🚫 *Olá! A Melhor Marmita está fechada agora.*\n\n⏰ Nosso horário de atendimento é:\nSegunda a Sexta, das 08h às 18h.\n\nEsperamos seu contato no horário comercial! 👋`);
          return res.status(200).json({ ok: true });
