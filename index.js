@@ -126,10 +126,10 @@ async function calcularFreteGoogle(cepDestino) {
     // =======================================================================
     // 🧪 TABELA DE PREÇOS DE TESTE (CENTAVOS)
     // =======================================================================
-    if (distanciaKm <= 3.0) return { valor: 0.01, texto: "R$ 0,01 (Teste Perto)", endereco: enderecoGoogle, km: distanciaKm };
-    if (distanciaKm <= 6.0) return { valor: 0.02, texto: "R$ 0,02 (Teste Médio)", endereco: enderecoGoogle, km: distanciaKm };
-    if (distanciaKm <= 15.0) return { valor: 0.03, texto: "R$ 0,03 (Teste Longe)", endereco: enderecoGoogle, km: distanciaKm };
-    if (distanciaKm <= 20.0) return { valor: 0.04, texto: "R$ 0,04 (Teste Muito Longe)", endereco: enderecoGoogle, km: distanciaKm };
+    if (distanciaKm <= 3.0) return { valor: 1.01, texto: "R$ 1,01 (Teste Perto)", endereco: enderecoGoogle, km: distanciaKm };
+    if (distanciaKm <= 6.0) return { valor: 1.02, texto: "R$ 1,02 (Teste Médio)", endereco: enderecoGoogle, km: distanciaKm };
+    if (distanciaKm <= 15.0) return { valor: 1.03, texto: "R$ 1,03 (Teste Longe)", endereco: enderecoGoogle, km: distanciaKm };
+    if (distanciaKm <= 20.0) return { valor: 1.04, texto: "R$ 1,04 (Teste Muito Longe)", endereco: enderecoGoogle, km: distanciaKm };
 
     return { erro: true, msg: "🚫 Desculpe, mas este endereço fica muito longe da nossa área de entrega no momento." };
 
