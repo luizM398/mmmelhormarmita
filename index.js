@@ -492,7 +492,7 @@ app.post('/mensagem', async (req, res) => {
         resposta = `🍛 *Qual tipo de strogonoff?*\n\n1️⃣ Tradicional\n2️⃣ Light`;
       } else {
         cliente.estado = 'QUANTIDADE';
-        resposta = `🔢 Digite a *quantidade* para ${prato.PRATO}:`;
+        resposta = `🔢 *Quantas marmitas desse prato deseja adicionar ao seu pedido?*`;
       }
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta);
@@ -512,7 +512,7 @@ app.post('/mensagem', async (req, res) => {
         await enviarMensagemWA(numero, resposta);
       } else {
         cliente.estado = 'QUANTIDADE';
-        resposta = `🔢 Digite a *quantidade*:`;
+        resposta = `🔢 *Quantas marmitas desse prato deseja adicionar ao seu pedido?*`;
         cliente.ultimaMensagem = resposta;
         await enviarMensagemWA(numero, resposta);
       }
@@ -525,7 +525,7 @@ app.post('/mensagem', async (req, res) => {
       else if (mensagem === '2' || mensagem.includes('light')) itemAtual.strogonoff = 'Light';
       else { await enviarMensagemWA(numero, msgNaoEntendi(cliente.ultimaMensagem)); return res.status(200).json({ ok: true }); }
       cliente.estado = 'QUANTIDADE';
-      resposta = `🔢 Digite a *quantidade*:`;
+      resposta = `🔢 *Quantas marmitas desse prato deseja adicionar ao seu pedido?*`;
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
       return res.status(200).json({ ok: true });
