@@ -53,7 +53,6 @@ setInterval(() => {
   const agora = Date.now();
   const tempoLimite = 12 * 60 * 60 * 1000; // 12 horas
   
-  // Reseta o contador do Google Maps se mudou o dia
   const diaHoje = new Date().getDate();
   if (CONTROLE_MAPS.dia !== diaHoje) {
       console.log('🔄 Novo dia! Resetando contador do Google Maps.');
@@ -61,14 +60,13 @@ setInterval(() => {
       CONTROLE_MAPS.consultas = 0;
   }
 
-  // Limpa clientes inativos
   Object.keys(clientes).forEach(numero => {
     const cliente = clientes[numero];
     if ((agora - cliente.ultimoContato) > tempoLimite && cliente.estado !== 'FINALIZADO') {
        delete clientes[numero];
     }
   });
-}, 60 * 60 * 1000); // Roda a cada 1 hora
+}, 60 * 60 * 1000); 
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -81,168 +79,106 @@ app.use(express.urlencoded({ extended: true }));
 // ==============================================================================
 
 const NUMERO_ADMIN = '5551984050946'; 
-
-// SEUS TOKENS
 const MP_ACCESS_TOKEN = 'APP_USR-3976540518966482-012110-64c2873d7929c168846b389d4f6c311e-281673709'; 
 const WASENDER_TOKEN = process.env.WASENDER_TOKEN || '399f73920f6d3300e39fc9f8f0e34eb40510a8a14847e288580d5d10e40cdae4'; 
 const URL_DO_SEU_SITE = 'https://mmmelhormarmita.onrender.com';
-
-// 🔑 SUA CHAVE DO GOOGLE MAPS
 const GOOGLE_API_KEY = 'AIzaSyAc6xZjyQRgBS52UfOKc93PthX9HlMMqHw'; 
-
-// SEU ENDEREÇO
 const ORIGEM_COZINHA = 'Rua Guaíba, 10 - CEP 91560-640, Lomba do Pinheiro, Porto Alegre, RS';
 
 // ==============================================================================
 
 const TEMPO_INATIVO = 10 * 60 * 1000; 
 const timersClientes = {};
-
 const client = new MercadoPagoConfig({ accessToken: MP_ACCESS_TOKEN, options: { timeout: 5000 } });
 
 // ==============================================================================
-// 🗺️ INTELIGÊNCIA DE FRETE (COM TRAVA DE SEGURANÇA 🔒)
+// 🗺️ FRETE INTELIGENTE
 // ==============================================================================
 
 async function calcularFreteGoogle(cepDestino) {
   try {
-    // 1. TRAVA ANTI-HACKER (Limita consultas diárias)
     if (CONTROLE_MAPS.consultas >= CONTROLE_MAPS.LIMITE_DIARIO) {
-        console.error('⚠️ LIMITE DIÁRIO DO GOOGLE MAPS ATINGIDO!');
-        return { erro: true, msg: "⚠️ O sistema automático de frete está indisponível no momento. Por favor, envie seu endereço por escrito que calculamos para você! (Erro: Cota)" };
+        return { erro: true, msg: "⚠️ O sistema automático de frete está indisponível. Envie seu endereço por escrito." };
     }
-
     const cepLimpo = String(cepDestino).replace(/\D/g, '');
+    if (cepLimpo.length !== 8) return { erro: true, msg: "⚠️ CEP inválido. Digite os 8 números." };
 
-    // 2. TRAVA DE VALIDAÇÃO (Economiza consulta se CEP for inválido)
-    if (cepLimpo.length !== 8) {
-      return { erro: true, msg: "⚠️ CEP inválido. Por favor, digite apenas os 8 números do CEP (Ex: 91550100)." };
-    }
-
-    console.log(`🗺️ Calculando rota (${CONTROLE_MAPS.consultas + 1}/${CONTROLE_MAPS.LIMITE_DIARIO}): ${ORIGEM_COZINHA} -> CEP ${cepLimpo}`);
-
+    console.log(`🗺️ Rota (${CONTROLE_MAPS.consultas + 1}): CEP ${cepLimpo}`);
     const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(ORIGEM_COZINHA)}&destinations=cep+${cepLimpo}&mode=driving&language=pt-BR&key=${GOOGLE_API_KEY}`;
-    
-    // INCREMENTA O CONTADOR (Gasta 1 ficha)
     CONTROLE_MAPS.consultas++;
 
     const response = await axios.get(url);
     const data = response.data;
 
-    if (data.status !== 'OK' || !data.rows[0].elements[0].distance) {
-      return { erro: true, msg: "❌ Não consegui localizar este CEP. Tente novamente." };
-    }
-
+    if (data.status !== 'OK' || !data.rows[0].elements[0].distance) return { erro: true, msg: "❌ CEP não localizado." };
     const elemento = data.rows[0].elements[0];
-    
-    if (elemento.status !== 'OK') {
-       return { erro: true, msg: "🚫 Não encontramos rota para este CEP. Verifique se digitou corretamente." };
-    }
+    if (elemento.status !== 'OK') return { erro: true, msg: "🚫 Rota não encontrada." };
 
-    const distanciaMetros = elemento.distance.value;
-    const distanciaKm = distanciaMetros / 1000;
+    const distanciaKm = elemento.distance.value / 1000;
     const enderecoGoogle = data.destination_addresses[0]; 
 
-    console.log(`📏 Distância encontrada: ${distanciaKm.toFixed(2)} km`);
+    // TABELA DE PREÇOS (TESTE R$ 1.00+)
+    if (distanciaKm <= 3.0) return { valor: 1.01, texto: "R$ 1,01", endereco: enderecoGoogle };
+    if (distanciaKm <= 6.0) return { valor: 1.02, texto: "R$ 1.02", endereco: enderecoGoogle };
+    if (distanciaKm <= 15.0) return { valor: 1.03, texto: "R$ 1,03", endereco: enderecoGoogle };
+    if (distanciaKm <= 20.0) return { valor: 1.04, texto: "R$ 1,04", endereco: enderecoGoogle };
 
-    // =======================================================================
-    // 🧪 TABELA DE PREÇOS DE TESTE (R$ 1,00+ PARA CARTÃO)
-    // =======================================================================
-    if (distanciaKm <= 3.0) return { valor: 1.01, texto: "R$ 1,01 (Teste Perto)", endereco: enderecoGoogle, km: distanciaKm };
-    if (distanciaKm <= 6.0) return { valor: 1.02, texto: "R$ 1,02 (Teste Médio)", endereco: enderecoGoogle, km: distanciaKm };
-    if (distanciaKm <= 15.0) return { valor: 1.03, texto: "R$ 1,03 (Teste Longe)", endereco: enderecoGoogle, km: distanciaKm };
-    if (distanciaKm <= 20.0) return { valor: 1.04, texto: "R$ 1,04 (Teste Muito Longe)", endereco: enderecoGoogle, km: distanciaKm };
-
-    return { erro: true, msg: "🚫 Desculpe, mas este endereço fica muito longe da nossa área de entrega no momento." };
-
+    return { erro: true, msg: "🚫 Endereço fora da área de entrega." };
   } catch (error) {
-    console.error('Erro fatal no Maps:', error);
-    return { erro: true, msg: "⚠️ Erro ao calcular frete. Tente novamente mais tarde." };
+    return { erro: true, msg: "⚠️ Erro no cálculo de frete." };
   }
 }
 
 // ==============================================================================
-// 💰 FUNÇÕES DE PAGAMENTO (TESTE)
+// 💰 PAGAMENTO
 // ==============================================================================
-
 async function gerarPix(valor, clienteNome, clienteTelefone) {
   try {
     const payment = new Payment(client);
-    const emailAleatorio = `comprador.teste.${Date.now()}@gmail.com`;
-    const telefoneLimpo = String(clienteTelefone).replace(/\D/g, '');
-
     const body = {
       transaction_amount: parseFloat(valor.toFixed(2)),
-      description: `Pedido Marmita - ${clienteNome}`, 
+      description: `Marmita - ${clienteNome}`, 
       payment_method_id: 'pix',
       notification_url: `${URL_DO_SEU_SITE}/webhook`, 
-      external_reference: telefoneLimpo, 
-      payer: {
-        email: emailAleatorio, 
-        first_name: clienteNome || 'Cliente',
-        last_name: 'Marmita' 
-      }
+      external_reference: String(clienteTelefone).replace(/\D/g, ''), 
+      payer: { email: `testuser.${Date.now()}@test.com` }
     };
-
     const response = await payment.create({ body });
-    return {
-      copiaCola: response.point_of_interaction.transaction_data.qr_code,
-      idPagamento: response.id
-    };
-  } catch (error) {
-    console.error('❌ ERRO PIX:', JSON.stringify(error, null, 2));
-    return null;
-  }
+    return { copiaCola: response.point_of_interaction.transaction_data.qr_code, idPagamento: response.id };
+  } catch (error) { return null; }
 }
 
 async function gerarLinkPagamento(itens, frete, clienteTelefone) {
   try {
     const preference = new Preference(client);
-    const emailAleatorio = `comprador.teste.${Date.now()}@gmail.com`;
-    const telefoneLimpo = String(clienteTelefone).replace(/\D/g, '');
-
     const itemsPreference = itens.map(item => ({
       title: `${item.prato} (TESTE)`,
       quantity: parseInt(item.quantidade),
       currency_id: 'BRL',
       unit_price: item.quantidade >= 5 ? 0.01 : 0.05 
     }));
-
-    if (frete > 0) {
-      itemsPreference.push({
-        title: 'Taxa de Entrega (Teste)',
-        quantity: 1,
-        currency_id: 'BRL',
-        unit_price: parseFloat(frete)
-      });
-    }
+    if (frete > 0) itemsPreference.push({ title: 'Frete', quantity: 1, currency_id: 'BRL', unit_price: parseFloat(frete) });
 
     const body = {
       items: itemsPreference,
-      binary_mode: true, 
       payment_methods: { excluded_payment_types: [{ id: "ticket" }], installments: 1 },
       notification_url: `${URL_DO_SEU_SITE}/webhook`,
-      external_reference: telefoneLimpo,
-      payer: { email: emailAleatorio, name: "Comprador", surname: "Teste" },
+      external_reference: String(clienteTelefone).replace(/\D/g, ''),
       auto_return: 'approved'
     };
-
     const response = await preference.create({ body });
     return response.init_point;
-  } catch (error) {
-    console.error('❌ ERRO LINK:', error);
-    return null;
-  }
+  } catch (error) { return null; }
 }
 
 // ==============================================================================
-// 🖨️ AUXILIARES DE FORMATAÇÃO
+// 🖨️ AUXILIARES DE FORMATAÇÃO (QUEBRA DE LINHA INTELIGENTE)
 // ==============================================================================
 function pad(str, length) { return (str + '                                        ').substring(0, length); }
 function padL(str, length) { return ('                                        ' + str).slice(-length); }
 
 // ==============================================================================
-// 🔔 WEBHOOK (V15 - CUPOM CLIENTE + DEDO DURO ADMIN)
+// 🔔 WEBHOOK (V19 - FORMATAÇÃO AVANÇADA DO RECIBO)
 // ==============================================================================
 
 app.post('/webhook', async (req, res) => {
@@ -263,15 +199,14 @@ app.post('/webhook', async (req, res) => {
          const memoria = clientes[numeroCliente];
          
          let nomeCliente = "Cliente";
-         let resumoItens = "";     // Cupom Cliente
-         let resumoItensAdmin = ""; // Ficha Técnica Admin
+         let resumoItens = "";     
+         let resumoItensAdmin = ""; 
          let valorFrete = "0.00";
          let endereco = "Endereço via CEP";
          let subtotalVal = 0;
 
          if (memoria) {
-             memoria.estado = 'FINALIZADO'; // 🔒 TRAVA
-             
+             memoria.estado = 'FINALIZADO';
              nomeCliente = memoria.nome || "Cliente";
              if (memoria.valorFrete) valorFrete = memoria.valorFrete.toFixed(2);
              if (memoria.endereco) endereco = memoria.endereco;
@@ -281,26 +216,46 @@ app.post('/webhook', async (req, res) => {
                      let nomePrato = item.prato;
                      let nomeTecnico = item.prato;
 
-                     if (item.arroz) { 
-                        nomePrato += ` (${item.arroz})`; 
-                        nomeTecnico += ` / Arr: ${item.arroz}`; 
+                     // ✅ REGRA 1: SÓ MOSTRA SE FOR INTEGRAL OU LIGHT
+                     if (item.arroz === 'Integral') { 
+                        nomePrato += ` (Integral)`; 
+                        nomeTecnico += ` / Integral`; 
                      }
-                     if (item.strogonoff) { 
-                        nomePrato += ` (${item.strogonoff})`; 
-                        nomeTecnico += ` / Strog: ${item.strogonoff}`;
+                     if (item.strogonoff === 'Light') { 
+                        nomePrato += ` (Light)`; 
+                        nomeTecnico += ` / Light`; 
                      }
+                     // Se for Branco ou Tradicional, não adiciona nada no nome.
 
                      const precoItem = item.quantidade >= 5 ? 0.01 : 0.05; // TESTE
                      const totalItem = item.quantidade * precoItem;
                      subtotalVal += totalItem;
 
-                     // Cliente (Bonito)
+                     // ✅ REGRA 2: QUEBRA DE LINHA INTELIGENTE
                      const qtdStr = (item.quantidade + 'x').padEnd(3);
-                     const descStr = pad(nomePrato.substring(0, 18), 18); 
                      const totalStr = padL('R$ ' + totalItem.toFixed(2), 8);
-                     resumoItens += `${qtdStr} ${descStr} ${totalStr}\n`;
+                     
+                     // Limite de caracteres por linha antes de quebrar
+                     const limiteChar = 22; 
 
-                     // Admin (Simples e Direto)
+                     if (nomePrato.length <= limiteChar) {
+                         // Nome curto: 1 linha
+                         const descStr = pad(nomePrato, 22);
+                         resumoItens += `${qtdStr} ${descStr} ${totalStr}\n`;
+                     } else {
+                         // Nome longo: 2 linhas
+                         // Tenta cortar no último espaço antes do limite para não cortar palavra
+                         let corte = nomePrato.lastIndexOf(' ', limiteChar);
+                         if (corte === -1) corte = limiteChar; // Se não tiver espaço, corta na força bruta
+
+                         const linha1 = nomePrato.substring(0, corte);
+                         const linha2 = nomePrato.substring(corte + 1); // Restante
+                         
+                         resumoItens += `${qtdStr} ${linha1}\n`; // Linha 1
+                         resumoItens += `    ${pad(linha2, 22)} ${totalStr}\n`; // Linha 2 (indentado + preço)
+                     }
+
+                     // Admin recebe simplificado
                      resumoItensAdmin += `▪️ ${item.quantidade}x ${nomeTecnico}\n`;
                  });
              }
@@ -308,29 +263,27 @@ app.post('/webhook', async (req, res) => {
 
          console.log(`✅ Pagamento Aprovado! Cliente: ${numeroCliente}`);
          
-         // 1. CUPOM PARA O CLIENTE
          const comprovanteCliente = 
 `\`\`\`
 🧾 MELHOR MARMITA - PEDIDO #${data.id.slice(-4)}
---------------------------------
+--------------------------------------
 📅 ${dataFormatada} - ${horaFormatada}
 👤 ${nomeCliente.toUpperCase()}
 🚚 Entrega: 3 a 5 dias úteis
---------------------------------
-QTD DESCRIÇÃO          TOTAL
+--------------------------------------
+QTD DESCRIÇÃO              TOTAL
 ${resumoItens}
---------------------------------
-SUBTOTAL:          R$ ${subtotalVal.toFixed(2)}
-FRETE:             R$ ${valorFrete}
-TOTAL FINAL:       R$ ${valorPago.toFixed(2)}
---------------------------------
+--------------------------------------
+SUBTOTAL:             R$ ${subtotalVal.toFixed(2)}
+FRETE:                R$ ${valorFrete}
+TOTAL FINAL:          R$ ${valorPago.toFixed(2)}
+--------------------------------------
 📍 ENTREGA:
 ${endereco}
---------------------------------
+--------------------------------------
 ✅ PAGAMENTO APROVADO
 \`\`\``;
 
-         // 2. DEDO DURO PARA VOCÊ (DADOS TÉCNICOS)
          const msgAdmin = 
 `🔔 *NOVO PEDIDO PAGO!* 👨‍🍳🔥
 --------------------------------
@@ -349,17 +302,12 @@ ${resumoItensAdmin}
 --------------------------------
 ✅ *Status:* PIX OK`;
 
-         // Envia para o Cliente
          await enviarMensagemWA(numeroCliente, `Aqui está seu comprovante detalhado:`);
          await enviarMensagemWA(numeroCliente, comprovanteCliente);
          await enviarMensagemWA(numeroCliente, `Muito obrigado, ${nomeCliente}! Já enviamos para a cozinha. 👨‍🍳🔥`);
-         
-         // Envia para o Admin
          await enviarMensagemWA(NUMERO_ADMIN, msgAdmin);
        }
-     } catch (error) {
-       console.error("Erro Webhook:", error);
-     }
+     } catch (error) { console.error("Erro Webhook:", error); }
   }
   res.status(200).send('OK');
 });
@@ -409,10 +357,10 @@ async function enviarMensagemWA(numero, texto) {
 }
 
 // ==============================================================================
-// 🚀 ROTAS (LÓGICA PRINCIPAL)
+// 🚀 ROTAS
 // ==============================================================================
 
-app.get('/', (req, res) => { res.send('🤖 Bot V17 (CORREÇÃO DE CEP + R$1.00) ON 🚀'); });
+app.get('/', (req, res) => { res.send('🤖 Bot V19 (RECIBO INTELIGENTE) ON 🚀'); });
 
 app.post('/mensagem', async (req, res) => {
   try {
@@ -425,9 +373,7 @@ app.post('/mensagem', async (req, res) => {
     const remoteJid = dadosMensagem.key?.remoteJid || "";
     const fromMe = dadosMensagem.key?.fromMe;
     
-    if (remoteJid.includes('status') || remoteJid.includes('@g.us') || fromMe === true) {
-      return res.status(200).json({ ok: true });
-    }
+    if (remoteJid.includes('status') || remoteJid.includes('@g.us') || fromMe === true) return res.status(200).json({ ok: true });
 
     let numeroRaw = dadosMensagem.key?.cleanedSenderPn || dadosMensagem.key?.senderPn || remoteJid;
     const numero = String(numeroRaw).split('@')[0].replace(/\D/g, '');
@@ -436,22 +382,17 @@ app.post('/mensagem', async (req, res) => {
     if (!texto || !numero) return res.status(200).json({ ok: true });
     const mensagem = texto.trim().toLowerCase();
     
-    // ========================================================================
-    // ⏰ VERIFICAÇÃO DE HORÁRIO (SEG-SEX, 08h-18h)
-    // ========================================================================
+    // ⏰ HORÁRIO
     const dataBrasil = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Sao_Paulo"}));
-    const diaSemana = dataBrasil.getDay(); // 0=Dom, 6=Sab
+    const diaSemana = dataBrasil.getDay(); 
     const horaAtual = dataBrasil.getHours();
 
-    // Se for Sab/Dom OU fora do horário 08-18
     if ((diaSemana === 0 || diaSemana === 6) || (horaAtual < 8 || horaAtual >= 18)) {
-       // Permite apenas o ADMIN acessar fora de hora para testes
        if (numero !== NUMERO_ADMIN) {
          await enviarMensagemWA(numero, `🚫 *Olá! A Melhor Marmita está fechada agora.*\n\n⏰ Nosso horário de atendimento é:\nSegunda a Sexta, das 08h às 18h.\n\nEsperamos seu contato no horário comercial! 👋`);
          return res.status(200).json({ ok: true });
        }
     }
-    // ========================================================================
 
     iniciarTimerInatividade(numero);
     
@@ -485,10 +426,10 @@ app.post('/mensagem', async (req, res) => {
         return res.status(200).json({ ok: true });
     }
     
-    // 3. CANCELAR (TRAVA DE SEGURANÇA)
+    // 3. CANCELAR
     if (mensagem === 'cancelar') {
       if (cliente.estado === 'FINALIZADO') {
-         await enviarMensagemWA(numero, `⚠️ *Pedido já pago e confirmado!* \n\nO robô não pode cancelar agora pois a cozinha já recebeu seu pedido. \nPor favor, entre em contato direto pelo WhatsApp se precisar de ajuda.`);
+         await enviarMensagemWA(numero, `⚠️ *Pedido já pago e confirmado!*`);
          return res.status(200).json({ ok: true });
       }
       const nomeSalvo = cliente.nome;
@@ -564,7 +505,6 @@ app.post('/mensagem', async (req, res) => {
           await enviarMensagemWA(numero, menuPrincipal(cliente.nome)); 
           return res.status(200).json({ ok: true }); 
       }
-      
       const escolha = parseInt(mensagem);
       if (isNaN(escolha) || escolha < 1 || escolha > cliente.opcoesPrato.length) { await enviarMensagemWA(numero, msgNaoEntendi(cliente.ultimaMensagem)); return res.status(200).json({ ok: true }); }
       
@@ -599,12 +539,14 @@ app.post('/mensagem', async (req, res) => {
       if (cliente.precisaStrogonoff) {
         cliente.estado = 'VARIACAO_STROGONOFF';
         resposta = `🍛 *Qual tipo de strogonoff?*\n\n1️⃣ Tradicional\n2️⃣ Light`;
+        cliente.ultimaMensagem = resposta;
+        await enviarMensagemWA(numero, resposta);
       } else {
         cliente.estado = 'QUANTIDADE';
         resposta = `🔢 Digite a *quantidade*:`;
+        cliente.ultimaMensagem = resposta;
+        await enviarMensagemWA(numero, resposta);
       }
-      cliente.ultimaMensagem = resposta;
-      await enviarMensagemWA(numero, resposta);
       return res.status(200).json({ ok: true });
     }
 
@@ -664,7 +606,6 @@ app.post('/mensagem', async (req, res) => {
         await enviarMensagemWA(numero, resposta); 
         return res.status(200).json({ ok: true });
       }
-      
       if (mensagem === '0') {
          estadoClientes.limparCarrinhoManterMenu(numero);
          await enviarMensagemWA(numero, menuPrincipal(cliente.nome));
@@ -674,7 +615,7 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    // 8. CÁLCULO DE FRETE
+    // 8. CEP
     if (cliente.estado === 'AGUARDANDO_CEP') {
       await enviarMensagemWA(numero, "🔍 Calculando rota no Google Maps... Só um instante.");
       const frete = await calcularFreteGoogle(texto);
@@ -696,7 +637,6 @@ app.post('/mensagem', async (req, res) => {
       cliente.totalFinal = totalComFrete;
       cliente.estado = 'CONFIRMANDO_ENDERECO_COMPLEMENTO';
       
-      // ✅ RESPOSTA COM OPÇÃO DE CORRIGIR CEP
       resposta = `✅ *Localizado!*\n📍 ${frete.endereco}\n🚚 Frete: *${textoFrete}*\n\n${cliente.nome}, por favor digite o *NÚMERO DA CASA* e *COMPLEMENTO*:\n\n_(Ou digite *0* para corrigir o CEP)_`;
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
@@ -704,16 +644,13 @@ app.post('/mensagem', async (req, res) => {
     }
 
     if (cliente.estado === 'CONFIRMANDO_ENDERECO_COMPLEMENTO') {
-        // 🔄 LÓGICA DO BOTÃO VOLTAR (0)
         if (mensagem === '0') {
             cliente.estado = 'AGUARDANDO_CEP';
             cliente.endereco = '';
             cliente.valorFrete = 0;
-            // Zera o subtotal visualmente mas a memória do pedido continua
             await enviarMensagemWA(numero, `🔄 Sem problemas! Digite o *CEP correto* (apenas números):`);
             return res.status(200).json({ ok: true });
         }
-
         cliente.endereco += ` - Compl: ${texto}`;
         cliente.estado = 'ESCOLHENDO_PAGAMENTO';
         
