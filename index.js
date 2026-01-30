@@ -9,6 +9,13 @@ const { MercadoPagoConfig, Payment, Preference } = require('mercadopago');
 // ==============================================================================
 const clientes = {};
 
+// 🛡️ CONTROLE DE SEGURANÇA (ANTI-HACKER / ANTI-GASTOS)
+const CONTROLE_MAPS = {
+  dia: new Date().getDate(),
+  consultas: 0,
+  LIMITE_DIARIO: 50 // 🔒 MÁXIMO DE 50 CONSULTAS AO GOOGLE POR DIA
+};
+
 const estadoClientes = {
   getEstado: (numero) => {
     if (!clientes[numero]) {
@@ -46,11 +53,17 @@ setInterval(() => {
   const agora = Date.now();
   const tempoLimite = 12 * 60 * 60 * 1000; // 12 horas
   
-  // console.log('🧹 Faxina: Verificando memórias antigas...');
-  
+  // Reseta o contador do Google Maps se mudou o dia
+  const diaHoje = new Date().getDate();
+  if (CONTROLE_MAPS.dia !== diaHoje) {
+      console.log('🔄 Novo dia! Resetando contador do Google Maps.');
+      CONTROLE_MAPS.dia = diaHoje;
+      CONTROLE_MAPS.consultas = 0;
+  }
+
+  // Limpa clientes inativos
   Object.keys(clientes).forEach(numero => {
     const cliente = clientes[numero];
-    // Só apaga se inativo > 12h E NÃO for pedido pago hoje
     if ((agora - cliente.ultimoContato) > tempoLimite && cliente.estado !== 'FINALIZADO') {
        delete clientes[numero];
     }
@@ -69,7 +82,7 @@ app.use(express.urlencoded({ extended: true }));
 
 const NUMERO_ADMIN = '5551984050946'; 
 
-// SEUS TOKENS REAIS
+// SEUS TOKENS
 const MP_ACCESS_TOKEN = 'APP_USR-3976540518966482-012110-64c2873d7929c168846b389d4f6c311e-281673709'; 
 const WASENDER_TOKEN = process.env.WASENDER_TOKEN || '399f73920f6d3300e39fc9f8f0e34eb40510a8a14847e288580d5d10e40cdae4'; 
 const URL_DO_SEU_SITE = 'https://mmmelhormarmita.onrender.com';
@@ -88,26 +101,35 @@ const timersClientes = {};
 const client = new MercadoPagoConfig({ accessToken: MP_ACCESS_TOKEN, options: { timeout: 5000 } });
 
 // ==============================================================================
-// 🗺️ INTELIGÊNCIA DE FRETE (GOOGLE MAPS) - VALORES DE TESTE
+// 🗺️ INTELIGÊNCIA DE FRETE (COM TRAVA DE SEGURANÇA 🔒)
 // ==============================================================================
 
 async function calcularFreteGoogle(cepDestino) {
   try {
+    // 1. TRAVA ANTI-HACKER (Limita consultas diárias)
+    if (CONTROLE_MAPS.consultas >= CONTROLE_MAPS.LIMITE_DIARIO) {
+        console.error('⚠️ LIMITE DIÁRIO DO GOOGLE MAPS ATINGIDO!');
+        return { erro: true, msg: "⚠️ O sistema automático de frete está indisponível no momento. Por favor, envie seu endereço por escrito que calculamos para você! (Erro: Cota)" };
+    }
+
     const cepLimpo = String(cepDestino).replace(/\D/g, '');
 
+    // 2. TRAVA DE VALIDAÇÃO (Economiza consulta se CEP for inválido)
     if (cepLimpo.length !== 8) {
       return { erro: true, msg: "⚠️ CEP inválido. Por favor, digite apenas os 8 números do CEP (Ex: 91550100)." };
     }
 
-    console.log(`🗺️ Calculando rota: ${ORIGEM_COZINHA} -> CEP ${cepLimpo}`);
+    console.log(`🗺️ Calculando rota (${CONTROLE_MAPS.consultas + 1}/${CONTROLE_MAPS.LIMITE_DIARIO}): ${ORIGEM_COZINHA} -> CEP ${cepLimpo}`);
 
     const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(ORIGEM_COZINHA)}&destinations=cep+${cepLimpo}&mode=driving&language=pt-BR&key=${GOOGLE_API_KEY}`;
     
+    // INCREMENTA O CONTADOR (Gasta 1 ficha)
+    CONTROLE_MAPS.consultas++;
+
     const response = await axios.get(url);
     const data = response.data;
 
     if (data.status !== 'OK' || !data.rows[0].elements[0].distance) {
-      console.error('Erro Google:', JSON.stringify(data));
       return { erro: true, msg: "❌ Não consegui localizar este CEP. Tente novamente." };
     }
 
@@ -126,10 +148,10 @@ async function calcularFreteGoogle(cepDestino) {
     // =======================================================================
     // 🧪 TABELA DE PREÇOS DE TESTE (CENTAVOS)
     // =======================================================================
-    if (distanciaKm <= 3.0) return { valor: 1.01, texto: "R$ 1,01 (Teste Perto)", endereco: enderecoGoogle, km: distanciaKm };
-    if (distanciaKm <= 6.0) return { valor: 1.02, texto: "R$ 1,02 (Teste Médio)", endereco: enderecoGoogle, km: distanciaKm };
-    if (distanciaKm <= 15.0) return { valor: 1.03, texto: "R$ 1,03 (Teste Longe)", endereco: enderecoGoogle, km: distanciaKm };
-    if (distanciaKm <= 20.0) return { valor: 1.04, texto: "R$ 1,04 (Teste Muito Longe)", endereco: enderecoGoogle, km: distanciaKm };
+    if (distanciaKm <= 3.0) return { valor: 0.01, texto: "R$ 0,01 (Teste Perto)", endereco: enderecoGoogle, km: distanciaKm };
+    if (distanciaKm <= 6.0) return { valor: 0.02, texto: "R$ 0,02 (Teste Médio)", endereco: enderecoGoogle, km: distanciaKm };
+    if (distanciaKm <= 15.0) return { valor: 0.03, texto: "R$ 0,03 (Teste Longe)", endereco: enderecoGoogle, km: distanciaKm };
+    if (distanciaKm <= 20.0) return { valor: 0.04, texto: "R$ 0,04 (Teste Muito Longe)", endereco: enderecoGoogle, km: distanciaKm };
 
     return { erro: true, msg: "🚫 Desculpe, mas este endereço fica muito longe da nossa área de entrega no momento." };
 
@@ -261,11 +283,11 @@ app.post('/webhook', async (req, res) => {
 
                      if (item.arroz) { 
                         nomePrato += ` (${item.arroz})`; 
-                        nomeTecnico += ` | Arr: ${item.arroz}`; 
+                        nomeTecnico += ` / Arr: ${item.arroz}`; 
                      }
                      if (item.strogonoff) { 
                         nomePrato += ` (${item.strogonoff})`; 
-                        nomeTecnico += ` | Strog: ${item.strogonoff}`;
+                        nomeTecnico += ` / Strog: ${item.strogonoff}`;
                      }
 
                      const precoItem = item.quantidade >= 5 ? 0.01 : 0.05; // TESTE
@@ -279,14 +301,14 @@ app.post('/webhook', async (req, res) => {
                      resumoItens += `${qtdStr} ${descStr} ${totalStr}\n`;
 
                      // Admin (Simples e Direto)
-                     resumoItensAdmin += `▪️ ${item.quantidade}x ${nomeTecnico} - R$ ${totalItem.toFixed(2)}\n`;
+                     resumoItensAdmin += `▪️ ${item.quantidade}x ${nomeTecnico}\n`;
                  });
              }
          }
 
          console.log(`✅ Pagamento Aprovado! Cliente: ${numeroCliente}`);
          
-         // 1. CUPOM PARA O CLIENTE (LIMPO)
+         // 1. CUPOM PARA O CLIENTE
          const comprovanteCliente = 
 `\`\`\`
 🧾 MELHOR MARMITA - PEDIDO #${data.id.slice(-4)}
@@ -390,7 +412,7 @@ async function enviarMensagemWA(numero, texto) {
 // 🚀 ROTAS (LÓGICA PRINCIPAL)
 // ==============================================================================
 
-app.get('/', (req, res) => { res.send('🤖 Bot V15 (FINAL - HORA/MAPS/FAXINA) ON 🚀'); });
+app.get('/', (req, res) => { res.send('🤖 Bot V16 (SECURITY EDITION 🔒) ON 🚀'); });
 
 app.post('/mensagem', async (req, res) => {
   try {
@@ -417,12 +439,11 @@ app.post('/mensagem', async (req, res) => {
     // ========================================================================
     // ⏰ VERIFICAÇÃO DE HORÁRIO (SEG-SEX, 08h-18h)
     // ========================================================================
-    // Pega a hora atual no fuso do Brasil (Importante para o Render)
     const dataBrasil = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Sao_Paulo"}));
-    const diaSemana = dataBrasil.getDay(); // 0 = Dom, 6 = Sab
-    const horaAtual = dataBrasil.getHours(); // 0 a 23
+    const diaSemana = dataBrasil.getDay(); // 0=Dom, 6=Sab
+    const horaAtual = dataBrasil.getHours();
 
-    // Se for Sábado(6) ou Domingo(0) OU se for antes das 8h ou depois das 18h
+    // Se for Sab/Dom OU fora do horário 08-18
     if ((diaSemana === 0 || diaSemana === 6) || (horaAtual < 8 || horaAtual >= 18)) {
        // Permite apenas o ADMIN acessar fora de hora para testes
        if (numero !== NUMERO_ADMIN) {
@@ -675,7 +696,7 @@ app.post('/mensagem', async (req, res) => {
       cliente.totalFinal = totalComFrete;
       cliente.estado = 'CONFIRMANDO_ENDERECO_COMPLEMENTO';
       
-      // ✅ RESPOSTA LIMPA (SEM DISTÂNCIA TÉCNICA VISÍVEL)
+      // ✅ RESPOSTA LIMPA
       resposta = `✅ *Localizado!*\n📍 ${frete.endereco}\n🚚 Frete: *${textoFrete}*\n\n${cliente.nome}, por favor digite o *NÚMERO DA CASA* e *COMPLEMENTO*:`;
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
