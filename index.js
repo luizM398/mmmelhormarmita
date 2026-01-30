@@ -151,26 +151,39 @@ async function gerarPix(valor, clienteNome, clienteTelefone) {
 async function gerarLinkPagamento(itens, frete, clienteTelefone) {
   try {
     const preference = new Preference(client);
-    const itemsPreference = itens.map(item => ({
-      title: `${item.prato} (TESTE)`,
-      quantity: parseInt(item.quantidade),
-      currency_id: 'BRL',
-      unit_price: item.quantidade >= 5 ? 0.01 : 0.05 
-    }));
-    if (frete > 0) itemsPreference.push({ title: 'Frete', quantity: 1, currency_id: 'BRL', unit_price: parseFloat(frete) });
+    const itemsPreference = itens.map(item => {
+      let nomeFinal = item.prato;
+      // ✅ Nomenclatura inteligente no link de pagamento
+      if (item.arroz === 'Integral') nomeFinal = nomeFinal.replace(/arroz/gi, 'arroz INTEGRAL');
+      if (item.strogonoff === 'Light') nomeFinal = nomeFinal.replace(/strogonoff/gi, 'strogonoff LIGHT');
+
+      return {
+        title: nomeFinal,
+        quantity: parseInt(item.quantidade),
+        unit_price: item.quantidade >= 5 ? 0.01 : 0.05,
+        currency_id: 'BRL'
+      };
+    });
+
+    if (frete > 0) {
+      itemsPreference.push({ title: 'Taxa de Entrega', quantity: 1, unit_price: parseFloat(frete), currency_id: 'BRL' });
+    }
 
     const body = {
       items: itemsPreference,
-      payment_methods: { excluded_payment_types: [{ id: "ticket" }], installments: 1 },
-      notification_url: `${URL_DO_SEU_SITE}/webhook`,
       external_reference: String(clienteTelefone).replace(/\D/g, ''),
-      auto_return: 'approved'
+      notification_url: `${URL_DO_SEU_SITE}/webhook`,
+      auto_return: 'approved',
+      payment_methods: { excluded_payment_types: [{ id: "ticket" }], installments: 1 }
     };
+
     const response = await preference.create({ body });
     return response.init_point;
-  } catch (error) { return null; }
+  } catch (error) {
+    console.error("Erro link MP:", error);
+    return null;
+  }
 }
-
 // ==============================================================================
 // 🖨️ AUXILIARES DE FORMATAÇÃO (QUEBRA DE LINHA INTELIGENTE)
 // ==============================================================================
