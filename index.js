@@ -62,7 +62,7 @@ const URL_DO_SEU_SITE = 'https://mmmelhormarmita.onrender.com';
 const GOOGLE_API_KEY = 'AIzaSyAc6xZjyQRgBS52UfOKc93PthX9HlMMqHw'; 
 
 // SEU ENDEREÇO DE ORIGEM (COZINHA) - Baseado na Parada 11
-const ORIGEM_COZINHA = 'Rua Guaíba, 10, Lomba do Pinheiro, Porto Alegre, RS';
+const ORIGEM_COZINHA = 'Rua Guaíba, 10 - CEP 91560-640, Lomba do Pinheiro, Porto Alegre, RS';
 
 // ==============================================================================
 
