@@ -146,12 +146,12 @@ async function calcularFreteGoogle(cepDestino) {
     console.log(`📏 Distância encontrada: ${distanciaKm.toFixed(2)} km`);
 
     // =======================================================================
-    // 🧪 TABELA DE PREÇOS DE TESTE (CENTAVOS)
+    // 🧪 TABELA DE PREÇOS DE TESTE (R$ 1,00+ PARA CARTÃO)
     // =======================================================================
-    if (distanciaKm <= 3.0) return { valor: 0.01, texto: "R$ 0,01 (Teste Perto)", endereco: enderecoGoogle, km: distanciaKm };
-    if (distanciaKm <= 6.0) return { valor: 0.02, texto: "R$ 0,02 (Teste Médio)", endereco: enderecoGoogle, km: distanciaKm };
-    if (distanciaKm <= 15.0) return { valor: 0.03, texto: "R$ 0,03 (Teste Longe)", endereco: enderecoGoogle, km: distanciaKm };
-    if (distanciaKm <= 20.0) return { valor: 0.04, texto: "R$ 0,04 (Teste Muito Longe)", endereco: enderecoGoogle, km: distanciaKm };
+    if (distanciaKm <= 3.0) return { valor: 1.01, texto: "R$ 1,01 (Teste Perto)", endereco: enderecoGoogle, km: distanciaKm };
+    if (distanciaKm <= 6.0) return { valor: 1.02, texto: "R$ 1,02 (Teste Médio)", endereco: enderecoGoogle, km: distanciaKm };
+    if (distanciaKm <= 15.0) return { valor: 1.03, texto: "R$ 1,03 (Teste Longe)", endereco: enderecoGoogle, km: distanciaKm };
+    if (distanciaKm <= 20.0) return { valor: 1.04, texto: "R$ 1,04 (Teste Muito Longe)", endereco: enderecoGoogle, km: distanciaKm };
 
     return { erro: true, msg: "🚫 Desculpe, mas este endereço fica muito longe da nossa área de entrega no momento." };
 
@@ -412,7 +412,7 @@ async function enviarMensagemWA(numero, texto) {
 // 🚀 ROTAS (LÓGICA PRINCIPAL)
 // ==============================================================================
 
-app.get('/', (req, res) => { res.send('🤖 Bot V16 (SECURITY EDITION 🔒) ON 🚀'); });
+app.get('/', (req, res) => { res.send('🤖 Bot V17 (CORREÇÃO DE CEP + R$1.00) ON 🚀'); });
 
 app.post('/mensagem', async (req, res) => {
   try {
@@ -696,14 +696,24 @@ app.post('/mensagem', async (req, res) => {
       cliente.totalFinal = totalComFrete;
       cliente.estado = 'CONFIRMANDO_ENDERECO_COMPLEMENTO';
       
-      // ✅ RESPOSTA LIMPA
-      resposta = `✅ *Localizado!*\n📍 ${frete.endereco}\n🚚 Frete: *${textoFrete}*\n\n${cliente.nome}, por favor digite o *NÚMERO DA CASA* e *COMPLEMENTO*:`;
+      // ✅ RESPOSTA COM OPÇÃO DE CORRIGIR CEP
+      resposta = `✅ *Localizado!*\n📍 ${frete.endereco}\n🚚 Frete: *${textoFrete}*\n\n${cliente.nome}, por favor digite o *NÚMERO DA CASA* e *COMPLEMENTO*:\n\n_(Ou digite *0* para corrigir o CEP)_`;
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
       return res.status(200).json({ ok: true });
     }
 
     if (cliente.estado === 'CONFIRMANDO_ENDERECO_COMPLEMENTO') {
+        // 🔄 LÓGICA DO BOTÃO VOLTAR (0)
+        if (mensagem === '0') {
+            cliente.estado = 'AGUARDANDO_CEP';
+            cliente.endereco = '';
+            cliente.valorFrete = 0;
+            // Zera o subtotal visualmente mas a memória do pedido continua
+            await enviarMensagemWA(numero, `🔄 Sem problemas! Digite o *CEP correto* (apenas números):`);
+            return res.status(200).json({ ok: true });
+        }
+
         cliente.endereco += ` - Compl: ${texto}`;
         cliente.estado = 'ESCOLHENDO_PAGAMENTO';
         
