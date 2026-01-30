@@ -116,22 +116,22 @@ async function calcularFreteGoogle(cepDestino) {
     
     // Até 3km -> R$ 5,00 (Local / Vizinhos)
     if (distanciaKm <= 3.0) {
-      return { valor: 5.00, texto: "R$ 5,00", endereco: enderecoGoogle, km: distanciaKm };
+      return { valor: 1,00, texto: "R$ 1,00", endereco: enderecoGoogle, km: distanciaKm };
     }
 
     // De 3km até 6km -> R$ 8,00 (Agronomia, Pontas da Lomba)
     if (distanciaKm <= 6.0) {
-      return { valor: 8.00, texto: "R$ 8,00", endereco: enderecoGoogle, km: distanciaKm };
+      return { valor: 1,01, texto: "R$ 1,01", endereco: enderecoGoogle, km: distanciaKm };
     }
 
     // De 6km até 15km -> R$ 15,00 (Partenon, Restinga, São José)
     if (distanciaKm <= 15.0) {
-      return { valor: 15.00, texto: "R$ 15,00", endereco: enderecoGoogle, km: distanciaKm };
+      return { valor: 1,02, texto: "R$ 1,02", endereco: enderecoGoogle, km: distanciaKm };
     }
 
     // De 15km até 20km -> R$ 20,00 (Zona Nobre / Longe)
     if (distanciaKm <= 20.0) {
-      return { valor: 20.00, texto: "R$ 20,00", endereco: enderecoGoogle, km: distanciaKm };
+      return { valor: 1,03, texto: "R$ 1,03", endereco: enderecoGoogle, km: distanciaKm };
     }
 
     // Acima de 20km -> BLOQUEADO 🚫
