@@ -46,7 +46,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ==============================================================================
-// ⚙️ ÁREA DE CONFIGURAÇÃO (SEUS DADOS REAIS + MODO TESTE)
+// ⚙️ ÁREA DE CONFIGURAÇÃO
 // ==============================================================================
 
 const NUMERO_ADMIN = '5551984050946'; 
@@ -70,7 +70,7 @@ const timersClientes = {};
 const client = new MercadoPagoConfig({ accessToken: MP_ACCESS_TOKEN, options: { timeout: 5000 } });
 
 // ==============================================================================
-// 🗺️ INTELIGÊNCIA DE FRETE (GOOGLE MAPS) - VALORES DE TESTE
+// 🗺️ INTELIGÊNCIA DE FRETE (GOOGLE MAPS)
 // ==============================================================================
 
 async function calcularFreteGoogle(cepDestino) {
@@ -106,7 +106,7 @@ async function calcularFreteGoogle(cepDestino) {
     console.log(`📏 Distância encontrada: ${distanciaKm.toFixed(2)} km`);
 
     // =======================================================================
-    // 🧪 TABELA DE PREÇOS DE TESTE (CENTAVOS PARA TESTAR MAPAS)
+    // 🧪 TABELA DE PREÇOS
     // =======================================================================
     
     if (distanciaKm <= 3.0) return { valor: 0.01, texto: "R$ 0,01 (Teste Perto)", endereco: enderecoGoogle, km: distanciaKm };
@@ -123,7 +123,7 @@ async function calcularFreteGoogle(cepDestino) {
 }
 
 // ==============================================================================
-// 💰 FUNÇÕES DE PAGAMENTO (PREÇOS DE TESTE)
+// 💰 FUNÇÕES DE PAGAMENTO
 // ==============================================================================
 
 async function gerarPix(valor, clienteNome, clienteTelefone) {
