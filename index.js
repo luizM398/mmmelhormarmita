@@ -155,7 +155,7 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
     const items = itens.map(item => ({
       title: item.prato,
       quantity: Number(item.quantidade),
-      unit_price: item.quantidade >= 5 ? 0.01 : 0.05,
+      unit_price: Number(item.quantidade >= 5 ? 0.01 : 0.05),
       currency_id: 'BRL'
     }));
 
@@ -172,7 +172,12 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
       body: {
         items: items,
         external_reference: String(clienteTelefone),
-        auto_return: 'approved'
+        // Adicionando as URLs necessárias para o Mercado Pago aceitar
+        back_urls: {
+          success: "https://www.google.com", // Depois você pode trocar pelo seu site
+          failure: "https://www.google.com",
+          pending: "https://www.google.com"
+        }
       }
     });
 
