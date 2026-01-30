@@ -184,134 +184,80 @@ function padL(str, length) { return ('                                        ' 
 app.post('/webhook', async (req, res) => {
   const { action, data } = req.body;
   if (action === 'payment.created' || action === 'payment.updated') {
-     try {
-       const payment = new Payment(client);
-       const pagamentoInfo = await payment.get({ id: data.id });
-       
-       if (pagamentoInfo.status === 'approved') {
-         const numeroCliente = pagamentoInfo.external_reference; 
-         const valorPago = pagamentoInfo.transaction_amount;
-         
-         const agora = new Date();
-         const dataFormatada = agora.toLocaleDateString('pt-BR');
-         const horaFormatada = agora.toLocaleTimeString('pt-BR').substring(0,5);
+    try {
+      const payment = new Payment(client);
+      const info = await payment.get({ id: data.id });
+      if (info.status === 'approved') {
+        const num = info.external_reference;
+        const memoria = clientes[num];
+        if (memoria) {
+          memoria.estado = 'FINALIZADO';
+          let subtotal = 0;
+          let itensCupom = "";
+          
+          memoria.pedido.forEach(item => {
+            let nomeExibicao = item.prato;
 
-         const memoria = clientes[numeroCliente];
-         
-         let nomeCliente = "Cliente";
-         let resumoItens = "";     
-         let resumoItensAdmin = ""; 
-         let valorFrete = "0.00";
-         let endereco = "Endereço via CEP";
-         let subtotalVal = 0;
+            // ✅ REGRA DE NOMENCLATURA: Substitui "arroz" por "arroz integral" etc.
+            if (item.arroz === 'Integral') {
+                nomeExibicao = nomeExibicao.replace(/arroz/gi, 'arroz integral');
+            }
+            if (item.strogonoff === 'Light') {
+                nomeExibicao = nomeExibicao.replace(/strogonoff/gi, 'strogonoff light');
+            }
 
-         if (memoria) {
-             memoria.estado = 'FINALIZADO';
-             nomeCliente = memoria.nome || "Cliente";
-             if (memoria.valorFrete) valorFrete = memoria.valorFrete.toFixed(2);
-             if (memoria.endereco) endereco = memoria.endereco;
+            const preco = item.quantidade >= 5 ? 0.01 : 0.05;
+            const totalItem = item.quantidade * preco;
+            subtotal += totalItem;
 
-             if (memoria.pedido && memoria.pedido.length > 0) {
-                 memoria.pedido.forEach(item => {
-                     let nomePrato = item.prato;
-                     let nomeTecnico = item.prato;
+            // ✅ FORMATAÇÃO DO CUPOM (ALINHADO)
+            const qtd = (item.quantidade + 'x').padEnd(3);
+            const val = padL('R$ ' + totalItem.toFixed(2), 8);
+            const limite = 25;
 
-                     // ✅ REGRA 1: SÓ MOSTRA SE FOR INTEGRAL OU LIGHT
-                     if (item.arroz === 'Integral') { 
-                        nomePrato += ` (Integral)`; 
-                        nomeTecnico += ` / Integral`; 
-                     }
-                     if (item.strogonoff === 'Light') { 
-                        nomePrato += ` (Light)`; 
-                        nomeTecnico += ` / Light`; 
-                     }
-                     // Se for Branco ou Tradicional, não adiciona nada no nome.
+            if (nomeExibicao.length <= limite) {
+              itensCupom += `${qtd} ${pad(nomeExibicao, 25)} ${val}\n`;
+            } else {
+              let corte = nomeExibicao.lastIndexOf(' ', limite);
+              if (corte === -1) corte = limite;
+              itensCupom += `${qtd} ${nomeExibicao.substring(0, corte)}\n`;
+              itensCupom += `    ${pad(nomeExibicao.substring(corte + 1), 25)} ${val}\n`;
+            }
+          });
 
-                     const precoItem = item.quantidade >= 5 ? 0.01 : 0.05; // TESTE
-                     const totalItem = item.quantidade * precoItem;
-                     subtotalVal += totalItem;
+          const dataBr = new Date().toLocaleDateString('pt-BR');
+          const horaBr = new Date().toLocaleTimeString('pt-BR').substring(0,5);
 
-                     // ✅ REGRA 2: QUEBRA DE LINHA INTELIGENTE
-                     const qtdStr = (item.quantidade + 'x').padEnd(3);
-                     const totalStr = padL('R$ ' + totalItem.toFixed(2), 8);
-                     
-                     // Limite de caracteres por linha antes de quebrar
-                     const limiteChar = 22; 
-
-                     if (nomePrato.length <= limiteChar) {
-                         // Nome curto: 1 linha
-                         const descStr = pad(nomePrato, 22);
-                         resumoItens += `${qtdStr} ${descStr} ${totalStr}\n`;
-                     } else {
-                         // Nome longo: 2 linhas
-                         // Tenta cortar no último espaço antes do limite para não cortar palavra
-                         let corte = nomePrato.lastIndexOf(' ', limiteChar);
-                         if (corte === -1) corte = limiteChar; // Se não tiver espaço, corta na força bruta
-
-                         const linha1 = nomePrato.substring(0, corte);
-                         const linha2 = nomePrato.substring(corte + 1); // Restante
-                         
-                         resumoItens += `${qtdStr} ${linha1}\n`; // Linha 1
-                         resumoItens += `    ${pad(linha2, 22)} ${totalStr}\n`; // Linha 2 (indentado + preço)
-                     }
-
-                     // Admin recebe simplificado
-                     resumoItensAdmin += `▪️ ${item.quantidade}x ${nomeTecnico}\n`;
-                 });
-             }
-         }
-
-         console.log(`✅ Pagamento Aprovado! Cliente: ${numeroCliente}`);
-         
-         const comprovanteCliente = 
+          const cupomFinal = 
 `\`\`\`
-🧾 MELHOR MARMITA - PEDIDO #${data.id.slice(-4)}
+       🧾  MELHOR MARMITA  🍱
+     CUPOM DE PEDIDO: #${data.id.slice(-4)}
 --------------------------------------
-📅 ${dataFormatada} - ${horaFormatada}
-👤 ${nomeCliente.toUpperCase()}
-🚚 Entrega: 3 a 5 dias úteis
+CLIENTE: ${memoria.nome.toUpperCase()}
+DATA: ${dataBr} - ${horaBr}
 --------------------------------------
-QTD DESCRIÇÃO              TOTAL
-${resumoItens}
+ITEM                      QTD    VALOR
 --------------------------------------
-SUBTOTAL:             R$ ${subtotalVal.toFixed(2)}
-FRETE:                R$ ${valorFrete}
-TOTAL FINAL:          R$ ${valorPago.toFixed(2)}
+${itensCupom}
 --------------------------------------
-📍 ENTREGA:
-${endereco}
+SUBTOTAL:                 R$ ${subtotal.toFixed(2)}
+FRETE:                    R$ ${memoria.valorFrete.toFixed(2)}
 --------------------------------------
-✅ PAGAMENTO APROVADO
+TOTAL PAGO:               R$ ${info.transaction_amount.toFixed(2)}
+--------------------------------------
+✅  PAGAMENTO CONFIRMADO
+    OBRIGADO PELA PREFERÊNCIA!
 \`\`\``;
 
-         const msgAdmin = 
-`🔔 *NOVO PEDIDO PAGO!* 👨‍🍳🔥
---------------------------------
-👤 *CLIENTE:* ${nomeCliente}
-📞 *CONTATO:* wa.me/${numeroCliente}
-🆔 *ID:* ${data.id}
---------------------------------
-📍 *ENDEREÇO DE ENTREGA:*
-${endereco}
---------------------------------
-📦 *ITENS:*
-${resumoItensAdmin}
-🚚 Frete: R$ ${valorFrete}
---------------------------------
-💰 *TOTAL DA VENDA: R$ ${valorPago.toFixed(2)}*
---------------------------------
-✅ *Status:* PIX OK`;
-
-         await enviarMensagemWA(numeroCliente, `Aqui está seu comprovante detalhado:`);
-         await enviarMensagemWA(numeroCliente, comprovanteCliente);
-         await enviarMensagemWA(numeroCliente, `Muito obrigado, ${nomeCliente}! Já enviamos para a cozinha. 👨‍🍳🔥`);
-         await enviarMensagemWA(NUMERO_ADMIN, msgAdmin);
-       }
-     } catch (error) { console.error("Erro Webhook:", error); }
+          await enviarMensagemWA(num, cupomFinal);
+          await enviarMensagemWA(num, `Tudo certo, ${memoria.nome}! Seu pedido já foi encaminhado para a nossa cozinha. 👨‍🍳🔥`);
+          await enviarMensagemWA(NUMERO_ADMIN, `🔔 *VENDA REALIZADA!*\n👤 Cliente: ${memoria.nome}\n💰 Valor: R$ ${info.transaction_amount.toFixed(2)}`);
+        }
+      }
+    } catch (e) { console.error("Erro Webhook:", e); }
   }
-  res.status(200).send('OK');
+  res.sendStatus(200);
 });
-
 // ==============================================================================
 // 🧠 LÓGICA DO ROBÔ
 // ==============================================================================
