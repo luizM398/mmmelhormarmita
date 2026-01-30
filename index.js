@@ -105,7 +105,7 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
       quantity: parseInt(item.quantidade),
       currency_id: 'BRL',
       // PREÇO REAL APLICADO AQUI
-      unit_price: item.quantidade >= 5 ? 17.49 : 19.99 
+      unit_price: item.quantidade >= 5 ? 0,01 : 0,05 
     }));
 
     if (frete > 0) {
@@ -367,7 +367,7 @@ app.post('/mensagem', async (req, res) => {
       const prato = cliente.opcoesPrato[escolha - 1];
       const nomePrato = prato.PRATO.toLowerCase();
       // PREÇO BASE VISUAL (O real é calculado no final)
-      cliente.pedido.push({ prato: prato.PRATO, valor: 19.99, arroz: null, strogonoff: null, quantidade: 0 });
+      cliente.pedido.push({ prato: prato.PRATO, valor: 0,05, arroz: null, strogonoff: null, quantidade: 0 });
       cliente.precisaArroz = nomePrato.includes('arroz');
       cliente.precisaStrogonoff = nomePrato.includes('strogonoff');
 
@@ -442,13 +442,13 @@ app.post('/mensagem', async (req, res) => {
         const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
         
         // --- CÁLCULO DE VALOR REAL ---
-        let valorUnitario = 19.99;
-        let textoPreco = "R$ 19,99/un";
+        let valorUnitario = 0,05;
+        let textoPreco = "R$ 0,05/un";
         let msgPromo = "";
 
         if (totalMarmitas >= 5) {
-          valorUnitario = 17.49;
-          textoPreco = "~R$ 19,99~ por *R$ 17,49* a unidade";
+          valorUnitario = 0,01;
+          textoPreco = "~R$ 0,05~ por *R$ 0,01* a unidade";
           msgPromo = "🎉 *PARABÉNS! PROMOÇÃO APLICADA!* (Acima de 5 un)\n";
         }
         // -----------------------------
@@ -482,7 +482,7 @@ app.post('/mensagem', async (req, res) => {
       const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
       
       // VALOR REAL FINAL
-      const valorUnitario = totalMarmitas >= 5 ? 17.49 : 19.99;
+      const valorUnitario = totalMarmitas >= 5 ? 0,01 : 0,05;
       const subtotalMarmitas = totalMarmitas * valorUnitario;
 
       let totalComFrete = 0;
