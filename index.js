@@ -204,7 +204,7 @@ function pad(str, length) { return (str + '                                     
 function padL(str, length) { return ('                                        ' + str).slice(-length); }
 
 // ==============================================================================
-// 🔔 WEBHOOK ATUALIZADO (V13.1 - TRAVA DE ESTADO + ENDEREÇO FULL)
+// 🔔 WEBHOOK (V13.2 - SEM DISTÂNCIA VISÍVEL + TRAVA + ENDEREÇO FULL)
 // ==============================================================================
 
 app.post('/webhook', async (req, res) => {
@@ -231,7 +231,7 @@ app.post('/webhook', async (req, res) => {
          let subtotalVal = 0;
 
          if (memoria) {
-             // 🔒 TRAVA DE SEGURANÇA: CLIENTE PAGO NÃO CANCELA MAIS
+             // 🔒 TRAVA DE SEGURANÇA: CLIENTE PAGO
              memoria.estado = 'FINALIZADO'; 
              
              nomeCliente = memoria.nome || "Cliente";
@@ -241,7 +241,6 @@ app.post('/webhook', async (req, res) => {
              if (memoria.pedido && memoria.pedido.length > 0) {
                  memoria.pedido.forEach(item => {
                      let nomePrato = item.prato;
-                     // Abreviando para caber na linha do WhatsApp
                      if (item.arroz === 'Branco') nomePrato += " (B)";
                      if (item.arroz === 'Integral') nomePrato += " (Int)";
                      if (item.strogonoff === 'Tradicional') nomePrato += " (Trad)";
@@ -262,7 +261,6 @@ app.post('/webhook', async (req, res) => {
 
          console.log(`✅ Pagamento Aprovado! Cliente: ${numeroCliente}`);
          
-         // 🧾 O CUPOM FORMATADO (SEM CORTAR ENDEREÇO)
          const comprovante = 
 `\`\`\`
 🧾 MELHOR MARMITA - PEDIDO #${data.id.slice(-4)}
@@ -302,7 +300,6 @@ ID TRANS: ${data.id}
 // ==============================================================================
 
 function menuPrincipal(nomeCliente) {
-  // Menu Personalizado
   const nomeDisplay = nomeCliente ? ` ${nomeCliente}` : '';
   return `🔻 *Menu Principal para${nomeDisplay}*\n\n1️⃣  Ver Cardápio do Dia\n2️⃣  Fazer Pedido\n3️⃣  Elogios ou Reclamações\n\n_Digite o número da opção desejada._`;
 }
@@ -346,7 +343,7 @@ async function enviarMensagemWA(numero, texto) {
 // 🚀 ROTAS (LÓGICA PRINCIPAL)
 // ==============================================================================
 
-app.get('/', (req, res) => { res.send('🤖 Bot V13.1 (TRAVA CANCELAR + FIX ENDEREÇO) ON 🚀'); });
+app.get('/', (req, res) => { res.send('🤖 Bot V13.2 (CLEAN + BLINDADO) ON 🚀'); });
 
 app.post('/mensagem', async (req, res) => {
   try {
@@ -377,19 +374,17 @@ app.post('/mensagem', async (req, res) => {
 
     console.log(`📩 Cliente ${numero}: "${mensagem}"`);
 
-    // 1. SAUDAÇÃO (AGORA PEDE NOME)
+    // 1. SAUDAÇÃO
     if (!cliente.recebeuSaudacao) {
       cliente.recebeuSaudacao = true;
       cliente.estado = 'PERGUNTANDO_NOME_INICIO';
-      
       resposta = `👋 Olá! Seja muito bem-vindo(a) à *Melhor Marmita* 🍱\n\nAntes de começarmos, *como gostaria de ser chamado(a)?*`;
-      
       cliente.ultimaMensagem = resposta; 
       await enviarMensagemWA(numero, resposta);
       return res.status(200).json({ ok: true });
     }
     
-    // 2. CAPTURA DO NOME (NOVA ETAPA)
+    // 2. NOME
     if (cliente.estado === 'PERGUNTANDO_NOME_INICIO') {
         if (texto.length < 2) {
             await enviarMensagemWA(numero, "❌ Nome muito curto. Por favor, digite seu nome:");
@@ -397,30 +392,24 @@ app.post('/mensagem', async (req, res) => {
         }
         cliente.nome = texto;
         cliente.estado = 'MENU';
-        
         resposta = `Prazer, ${cliente.nome}! 🤝\n\n` + menuPrincipal(cliente.nome);
         cliente.ultimaMensagem = resposta;
         await enviarMensagemWA(numero, resposta);
         return res.status(200).json({ ok: true });
     }
     
-    // 3. CANCELAR (COM TRAVA DE SEGURANÇA 🔒)
+    // 3. CANCELAR (TRAVA DE SEGURANÇA)
     if (mensagem === 'cancelar') {
-      
-      // SE JÁ PAGOU, NÃO CANCELA
       if (cliente.estado === 'FINALIZADO') {
          await enviarMensagemWA(numero, `⚠️ *Pedido já pago e confirmado!* \n\nO robô não pode cancelar agora pois a cozinha já recebeu seu pedido. \nPor favor, entre em contato direto pelo WhatsApp se precisar de ajuda.`);
          return res.status(200).json({ ok: true });
       }
-
-      const nomeSalvo = cliente.nome; // Guarda o nome pra não perder
+      const nomeSalvo = cliente.nome;
       estadoClientes.resetarCliente(numero); 
       const reset = estadoClientes.getEstado(numero);
-      
-      reset.nome = nomeSalvo; // Restaura o nome
+      reset.nome = nomeSalvo;
       reset.recebeuSaudacao = true; 
       reset.estado = 'MENU'; 
-      
       await enviarMensagemWA(numero, `❌ Pedido cancelado, ${nomeSalvo}.\n\n` + menuPrincipal(nomeSalvo));
       return res.status(200).json({ ok: true });
     }
@@ -555,7 +544,7 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    // 7. FECHAMENTO (JÁ TEM NOME, VAI PRO CEP)
+    // 7. FECHAMENTO
     if (cliente.estado === 'ADICIONAR_OUTRO') {
       if (mensagem === '1' || mensagem.includes('sim')) {
         cliente.estado = 'ESCOLHENDO_PRATO';
@@ -582,10 +571,8 @@ app.post('/mensagem', async (req, res) => {
 
         const subtotal = (totalMarmitas * valorUnitario).toFixed(2);
 
-        // PULA DIRETO PARA O CEP
         cliente.estado = 'AGUARDANDO_CEP'; 
         resposta = `📝 *Resumo do Pedido de ${cliente.nome}:*\n\n${msgPromo}Marmitas: ${totalMarmitas}\nValor: ${textoPreco}\n💰 *Subtotal: R$ ${subtotal}* (Sem frete)\n------------------------------\n\n📍 Para calcular a entrega, digite seu *CEP* (apenas números):`;
-        
         cliente.ultimaMensagem = resposta;
         await enviarMensagemWA(numero, resposta); 
         return res.status(200).json({ ok: true });
@@ -622,7 +609,8 @@ app.post('/mensagem', async (req, res) => {
       cliente.totalFinal = totalComFrete;
       cliente.estado = 'CONFIRMANDO_ENDERECO_COMPLEMENTO';
       
-      resposta = `✅ *Localizado!*\n📍 ${frete.endereco}\n📏 Distância: ${frete.km.toFixed(1)}km\n🚚 Frete: *${textoFrete}*\n\n${cliente.nome}, por favor digite o *NÚMERO DA CASA* e *COMPLEMENTO*:`;
+      // ✅ RESPOSTA LIMPA (SEM DISTÂNCIA TÉCNICA)
+      resposta = `✅ *Localizado!*\n📍 ${frete.endereco}\n🚚 Frete: *${textoFrete}*\n\n${cliente.nome}, por favor digite o *NÚMERO DA CASA* e *COMPLEMENTO*:`;
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
       return res.status(200).json({ ok: true });
@@ -673,15 +661,13 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
     
-    // 10. ESTADO FINALIZADO (Se o cliente mandar msg depois de pagar)
+    // 10. ESTADO FINALIZADO
     if (cliente.estado === 'FINALIZADO') {
        if (mensagem === 'menu' || mensagem === '0') {
-           // Permite começar um pedido NOVO se ele pedir explicitamente menu
            estadoClientes.resetarCliente(numero);
            await enviarMensagemWA(numero, menuPrincipal());
            return res.status(200).json({ ok: true });
        }
-       // Senão, ignora ou agradece
        await enviarMensagemWA(numero, `👋 Olá, ${cliente.nome}! Seu pedido anterior já está sendo preparado. \n\nSe quiser fazer um *novo pedido*, digite *MENU*.`);
        return res.status(200).json({ ok: true });
     }
@@ -694,7 +680,6 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    // SAUDAÇÃO INICIAL (SE DER ERRO DE FLUXO)
     await enviarMensagemWA(numero, `👋 Olá! Bem-vindo de volta, ${cliente.nome || 'Visitante'}!\n\n` + menuPrincipal(cliente.nome));
     return res.status(200).json({ ok: true });
 
