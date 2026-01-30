@@ -5,7 +5,7 @@ const axios = require('axios');
 const { MercadoPagoConfig, Payment, Preference } = require('mercadopago');
 
 // ==============================================================================
-// 🧠 MEMÓRIA DO ROBÔ (Gerenciamento de Estado)
+// 🧠 MEMÓRIA DO ROBÔ (Com suporte a NOME)
 // ==============================================================================
 const clientes = {};
 
@@ -15,6 +15,7 @@ const estadoClientes = {
       clientes[numero] = { 
         estado: 'INICIAL', 
         pedido: [], 
+        nome: '', // 🆕 Campo para guardar o nome
         recebeuSaudacao: false,
         ultimoContato: Date.now()
       };
@@ -25,6 +26,7 @@ const estadoClientes = {
     clientes[numero] = { 
       estado: 'INICIAL', 
       pedido: [], 
+      nome: '',
       recebeuSaudacao: false,
       ultimoContato: Date.now()
     };
@@ -44,24 +46,20 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ==============================================================================
-// ⚙️ ÁREA DE CONFIGURAÇÃO (SEUS DADOS REAIS MANTIDOS ✅)
+// ⚙️ ÁREA DE CONFIGURAÇÃO (SEUS DADOS REAIS + MODO TESTE)
 // ==============================================================================
 
 const NUMERO_ADMIN = '5551984050946'; 
 
-// SEU TOKEN DO MERCADO PAGO (Original do arquivo)
+// SEUS TOKENS DO ARQUIVO ENVIADO
 const MP_ACCESS_TOKEN = 'APP_USR-3976540518966482-012110-64c2873d7929c168846b389d4f6c311e-281673709'; 
-
-// SEU TOKEN DO WASENDER (Original do arquivo)
 const WASENDER_TOKEN = process.env.WASENDER_TOKEN || '399f73920f6d3300e39fc9f8f0e34eb40510a8a14847e288580d5d10e40cdae4'; 
+const URL_DO_SEU_SITE = 'https://mmmelhormarmita.onrender.com';
 
-// SEU LINK DO RENDER (Original do arquivo)
-const URL_DO_SEU_SITE = 'https://mmmelhormarmita.onrender.com'; 
-
-// 🔑 SUA CHAVE DO GOOGLE MAPS (Inserida aqui!)
+// 🔑 SUA CHAVE DO GOOGLE MAPS
 const GOOGLE_API_KEY = 'AIzaSyAc6xZjyQRgBS52UfOKc93PthX9HlMMqHw'; 
 
-// SEU ENDEREÇO DE ORIGEM (COZINHA) - Baseado na Parada 11
+// SEU ENDEREÇO (Ajustado com o CEP do arquivo)
 const ORIGEM_COZINHA = 'Rua Guaíba, 10 - CEP 91560-640, Lomba do Pinheiro, Porto Alegre, RS';
 
 // ==============================================================================
@@ -72,22 +70,19 @@ const timersClientes = {};
 const client = new MercadoPagoConfig({ accessToken: MP_ACCESS_TOKEN, options: { timeout: 5000 } });
 
 // ==============================================================================
-// 🗺️ INTELIGÊNCIA DE FRETE (GOOGLE MAPS V11)
+// 🗺️ INTELIGÊNCIA DE FRETE (GOOGLE MAPS) - VALORES DE TESTE
 // ==============================================================================
 
 async function calcularFreteGoogle(cepDestino) {
   try {
-    // Limpa o CEP (deixa só números)
     const cepLimpo = String(cepDestino).replace(/\D/g, '');
 
-    // Validação básica de CEP (8 dígitos)
     if (cepLimpo.length !== 8) {
       return { erro: true, msg: "⚠️ CEP inválido. Por favor, digite apenas os 8 números do CEP (Ex: 91550100)." };
     }
 
     console.log(`🗺️ Calculando rota: ${ORIGEM_COZINHA} -> CEP ${cepLimpo}`);
 
-    // Chama o Google Distance Matrix
     const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(ORIGEM_COZINHA)}&destinations=cep+${cepLimpo}&mode=driving&language=pt-BR&key=${GOOGLE_API_KEY}`;
     
     const response = await axios.get(url);
@@ -106,35 +101,19 @@ async function calcularFreteGoogle(cepDestino) {
 
     const distanciaMetros = elemento.distance.value;
     const distanciaKm = distanciaMetros / 1000;
-    const enderecoGoogle = data.destination_addresses[0]; // Endereço que o Google achou
+    const enderecoGoogle = data.destination_addresses[0]; 
 
     console.log(`📏 Distância encontrada: ${distanciaKm.toFixed(2)} km`);
 
     // =======================================================================
-    // 💲 TABELA DE PREÇOS POR KM
+    // 🧪 TABELA DE PREÇOS DE TESTE (CENTAVOS PARA TESTAR MAPAS)
     // =======================================================================
     
-    // Até 3km -> R$ 5,00 (Local / Vizinhos)
-    if (distanciaKm <= 3.0) {
-      return { valor: 1.00, texto: "R$ 1.00", endereco: enderecoGoogle, km: distanciaKm };
-    }
+    if (distanciaKm <= 3.0) return { valor: 0.01, texto: "R$ 0,01 (Teste Perto)", endereco: enderecoGoogle, km: distanciaKm };
+    if (distanciaKm <= 6.0) return { valor: 0.02, texto: "R$ 0,02 (Teste Médio)", endereco: enderecoGoogle, km: distanciaKm };
+    if (distanciaKm <= 15.0) return { valor: 0.03, texto: "R$ 0,03 (Teste Longe)", endereco: enderecoGoogle, km: distanciaKm };
+    if (distanciaKm <= 20.0) return { valor: 0.04, texto: "R$ 0,04 (Teste Muito Longe)", endereco: enderecoGoogle, km: distanciaKm };
 
-    // De 3km até 6km -> R$ 8,00 (Agronomia, Pontas da Lomba)
-    if (distanciaKm <= 6.0) {
-      return { valor: 1.01, texto: "R$ 1.01", endereco: enderecoGoogle, km: distanciaKm };
-    }
-
-    // De 6km até 15km -> R$ 15,00 (Partenon, Restinga, São José)
-    if (distanciaKm <= 15.0) {
-      return { valor: 1.02, texto: "R$ 1.02", endereco: enderecoGoogle, km: distanciaKm };
-    }
-
-    // De 15km até 20km -> R$ 20,00 (Zona Nobre / Longe)
-    if (distanciaKm <= 20.0) {
-      return { valor: 1.03, texto: "R$ 1.03", endereco: enderecoGoogle, km: distanciaKm };
-    }
-
-    // Acima de 20km -> BLOQUEADO 🚫
     return { erro: true, msg: "🚫 Desculpe, mas este endereço fica muito longe da nossa área de entrega no momento." };
 
   } catch (error) {
@@ -144,24 +123,24 @@ async function calcularFreteGoogle(cepDestino) {
 }
 
 // ==============================================================================
-// 💰 FUNÇÕES DE PAGAMENTO (ORIGINAIS MANTIDAS)
+// 💰 FUNÇÕES DE PAGAMENTO (PREÇOS DE TESTE)
 // ==============================================================================
 
 async function gerarPix(valor, clienteNome, clienteTelefone) {
   try {
     const payment = new Payment(client);
-    const emailAleatorio = `comprador.marmita.${Date.now()}@gmail.com`;
+    const emailAleatorio = `comprador.teste.${Date.now()}@gmail.com`;
     const telefoneLimpo = String(clienteTelefone).replace(/\D/g, '');
 
     const body = {
       transaction_amount: parseFloat(valor.toFixed(2)),
-      description: 'Pedido Marmita Delivery',
+      description: `Pedido Marmita - ${clienteNome}`, // Nome no extrato
       payment_method_id: 'pix',
       notification_url: `${URL_DO_SEU_SITE}/webhook`, 
       external_reference: telefoneLimpo, 
       payer: {
         email: emailAleatorio, 
-        first_name: 'Comprador',
+        first_name: clienteNome || 'Cliente',
         last_name: 'Marmita' 
       }
     };
@@ -180,19 +159,20 @@ async function gerarPix(valor, clienteNome, clienteTelefone) {
 async function gerarLinkPagamento(itens, frete, clienteTelefone) {
   try {
     const preference = new Preference(client);
-    const emailAleatorio = `comprador.marmita.${Date.now()}@gmail.com`;
+    const emailAleatorio = `comprador.teste.${Date.now()}@gmail.com`;
     const telefoneLimpo = String(clienteTelefone).replace(/\D/g, '');
 
     const itemsPreference = itens.map(item => ({
-      title: `${item.prato} (Delivery)`,
+      title: `${item.prato} (TESTE)`,
       quantity: parseInt(item.quantidade),
       currency_id: 'BRL',
+      // PREÇO DE TESTE (0.01 ou 0.05)
       unit_price: item.quantidade >= 5 ? 0.01 : 0.05 
     }));
 
     if (frete > 0) {
       itemsPreference.push({
-        title: 'Taxa de Entrega',
+        title: 'Taxa de Entrega (Teste)',
         quantity: 1,
         currency_id: 'BRL',
         unit_price: parseFloat(frete)
@@ -202,22 +182,10 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
     const body = {
       items: itemsPreference,
       binary_mode: true, 
-      payment_methods: {
-        excluded_payment_types: [{ id: "ticket" }], 
-        installments: 1
-      },
+      payment_methods: { excluded_payment_types: [{ id: "ticket" }], installments: 1 },
       notification_url: `${URL_DO_SEU_SITE}/webhook`,
       external_reference: telefoneLimpo,
-      payer: {
-          email: emailAleatorio,
-          name: "Comprador",
-          surname: "Marmita"
-      },
-      back_urls: {
-        success: 'https://www.google.com', 
-        failure: 'https://www.google.com',
-        pending: 'https://www.google.com'
-      },
+      payer: { email: emailAleatorio, name: "Comprador", surname: "Teste" },
       auto_return: 'approved'
     };
 
@@ -230,7 +198,13 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
 }
 
 // ==============================================================================
-// 🔔 WEBHOOK
+// 🖨️ GERADOR DE NOTA FISCAL (LAYOUT CUPOM)
+// ==============================================================================
+function pad(str, length) { return (str + '                                        ').substring(0, length); }
+function padL(str, length) { return ('                                        ' + str).slice(-length); }
+
+// ==============================================================================
+// 🔔 WEBHOOK ATUALIZADO (V13 - NOTA FISCAL + NOME)
 // ==============================================================================
 
 app.post('/webhook', async (req, res) => {
@@ -244,11 +218,74 @@ app.post('/webhook', async (req, res) => {
          const numeroCliente = pagamentoInfo.external_reference; 
          const valorPago = pagamentoInfo.transaction_amount;
          
-         console.log(`✅ Pagamento Aprovado! Cliente: ${numeroCliente}`);
-         const comprovante = `🧾 *COMPROVANTE DE PAGAMENTO*\n✅ *Status:* APROVADO\n💰 *Valor:* R$ ${valorPago.toFixed(2)}\n\nSeu pedido foi confirmado e enviado para a cozinha! 👨‍🍳🔥\nEm breve entraremos em contato para avisar sobre a entrega.`;
+         const agora = new Date();
+         const dataFormatada = agora.toLocaleDateString('pt-BR');
+         const horaFormatada = agora.toLocaleTimeString('pt-BR').substring(0,5);
 
+         const memoria = clientes[numeroCliente];
+         
+         let nomeCliente = "Cliente";
+         let resumoItens = "";
+         let valorFrete = "0.00";
+         let endereco = "Endereço via CEP";
+         let subtotalVal = 0;
+
+         if (memoria) {
+             nomeCliente = memoria.nome || "Cliente";
+             if (memoria.valorFrete) valorFrete = memoria.valorFrete.toFixed(2);
+             if (memoria.endereco) endereco = memoria.endereco;
+
+             if (memoria.pedido && memoria.pedido.length > 0) {
+                 memoria.pedido.forEach(item => {
+                     let nomePrato = item.prato;
+                     // Abreviando para caber na linha do WhatsApp
+                     if (item.arroz === 'Branco') nomePrato += " (B)";
+                     if (item.arroz === 'Integral') nomePrato += " (Int)";
+                     if (item.strogonoff === 'Tradicional') nomePrato += " (Trad)";
+                     if (item.strogonoff === 'Light') nomePrato += " (Lgt)";
+
+                     const precoItem = item.quantidade >= 5 ? 0.01 : 0.05; // TESTE
+                     const totalItem = item.quantidade * precoItem;
+                     subtotalVal += totalItem;
+
+                     const qtdStr = (item.quantidade + 'x').padEnd(3);
+                     const descStr = pad(nomePrato.substring(0, 18), 18); 
+                     const totalStr = padL('R$ ' + totalItem.toFixed(2), 8);
+
+                     resumoItens += `${qtdStr} ${descStr} ${totalStr}\n`;
+                 });
+             }
+         }
+
+         console.log(`✅ Pagamento Aprovado! Cliente: ${numeroCliente}`);
+         
+         // 🧾 O CUPOM FORMATADO
+         const comprovante = 
+`\`\`\`
+🧾 MELHOR MARMITA - PEDIDO #${data.id.slice(-4)}
+--------------------------------
+📅 ${dataFormatada} - ${horaFormatada}
+👤 ${nomeCliente.toUpperCase()}
+🚚 Entrega: 3 a 5 dias úteis
+--------------------------------
+QTD DESCRIÇÃO          TOTAL
+${resumoItens}
+--------------------------------
+SUBTOTAL:          R$ ${subtotalVal.toFixed(2)}
+FRETE:             R$ ${valorFrete}
+TOTAL FINAL:       R$ ${valorPago.toFixed(2)}
+--------------------------------
+📍 ENTREGA:
+${endereco.substring(0,30)}...
+--------------------------------
+ID TRANS: ${data.id}
+✅ PAGAMENTO APROVADO
+\`\`\``;
+
+         await enviarMensagemWA(numeroCliente, `Aqui está seu comprovante detalhado:`);
          await enviarMensagemWA(numeroCliente, comprovante);
-         await enviarMensagemWA(NUMERO_ADMIN, `🔔 *NOVO PAGAMENTO (Google Maps)*\nCliente: ${numeroCliente}\nValor: R$ ${valorPago.toFixed(2)}`);
+         await enviarMensagemWA(numeroCliente, `Muito obrigado, ${nomeCliente}! Já enviamos para a cozinha. 👨‍🍳🔥`);
+         await enviarMensagemWA(NUMERO_ADMIN, `🔔 *NOVA VENDA CONFIRMADA*\nCliente: ${nomeCliente}\nValor: R$ ${valorPago.toFixed(2)}`);
        }
      } catch (error) {
        console.error("Erro Webhook:", error);
@@ -261,16 +298,14 @@ app.post('/webhook', async (req, res) => {
 // 🧠 LÓGICA DO ROBÔ
 // ==============================================================================
 
-function saudacaoTexto() {
-  return `👋 Olá! Seja muito bem-vindo(a) à *Melhor Marmita* 🍱\nComida caseira, saborosa e feita com carinho! 😋`;
-}
-
-function menuPrincipal() {
-  return `🔻 *Menu Principal*\n\n1️⃣  Ver Cardápio do Dia\n2️⃣  Fazer Pedido\n3️⃣  Elogios ou Reclamações\n\n_Digite o número da opção desejada._`;
+function menuPrincipal(nomeCliente) {
+  // Menu Personalizado
+  const nomeDisplay = nomeCliente ? ` ${nomeCliente}` : '';
+  return `🔻 *Menu Principal para${nomeDisplay}*\n\n1️⃣  Ver Cardápio do Dia\n2️⃣  Fazer Pedido\n3️⃣  Elogios ou Reclamações\n\n_Digite o número da opção desejada._`;
 }
 
 function msgNaoEntendi(textoAnterior) {
-  return `🤔 *Não entendi sua resposta.*\nPor favor, escolha uma das opções abaixo:\n\n-----------------------------\n${textoAnterior || menuPrincipal()}`;
+  return `🤔 *Não entendi sua resposta.*\nPor favor, escolha uma das opções abaixo:\n\n-----------------------------\n${textoAnterior}`;
 }
 
 function carregarMenu() {
@@ -308,7 +343,7 @@ async function enviarMensagemWA(numero, texto) {
 // 🚀 ROTAS (LÓGICA PRINCIPAL)
 // ==============================================================================
 
-app.get('/', (req, res) => { res.send('🤖 Bot V11 (GOOGLE MAPS ATIVO) ON 🚀'); });
+app.get('/', (req, res) => { res.send('🤖 Bot V13 (NOME + MAPS + NF) ON 🚀'); });
 
 app.post('/mensagem', async (req, res) => {
   try {
@@ -339,32 +374,54 @@ app.post('/mensagem', async (req, res) => {
 
     console.log(`📩 Cliente ${numero}: "${mensagem}"`);
 
-    // 1. SAUDAÇÃO
+    // 1. SAUDAÇÃO (AGORA PEDE NOME)
     if (!cliente.recebeuSaudacao) {
       cliente.recebeuSaudacao = true;
-      cliente.estado = 'MENU';
-      resposta = saudacaoTexto() + `\n\n` + menuPrincipal();
+      cliente.estado = 'PERGUNTANDO_NOME_INICIO';
+      
+      resposta = `👋 Olá! Seja muito bem-vindo(a) à *Melhor Marmita* 🍱\n\nAntes de começarmos, *como gostaria de ser chamado(a)?*`;
+      
+      cliente.ultimaMensagem = resposta; 
       await enviarMensagemWA(numero, resposta);
       return res.status(200).json({ ok: true });
     }
     
-    // 2. CANCELAR
+    // 2. CAPTURA DO NOME (NOVA ETAPA)
+    if (cliente.estado === 'PERGUNTANDO_NOME_INICIO') {
+        if (texto.length < 2) {
+            await enviarMensagemWA(numero, "❌ Nome muito curto. Por favor, digite seu nome:");
+            return res.status(200).json({ ok: true });
+        }
+        cliente.nome = texto;
+        cliente.estado = 'MENU';
+        
+        resposta = `Prazer, ${cliente.nome}! 🤝\n\n` + menuPrincipal(cliente.nome);
+        cliente.ultimaMensagem = resposta;
+        await enviarMensagemWA(numero, resposta);
+        return res.status(200).json({ ok: true });
+    }
+    
+    // 3. CANCELAR
     if (mensagem === 'cancelar') {
+      const nomeSalvo = cliente.nome; // Guarda o nome pra não perder
       estadoClientes.resetarCliente(numero); 
       const reset = estadoClientes.getEstado(numero);
+      
+      reset.nome = nomeSalvo; // Restaura o nome
       reset.recebeuSaudacao = true; 
       reset.estado = 'MENU'; 
-      await enviarMensagemWA(numero, `❌ Pedido cancelado.\n\n` + menuPrincipal());
+      
+      await enviarMensagemWA(numero, `❌ Pedido cancelado, ${nomeSalvo}.\n\n` + menuPrincipal(nomeSalvo));
       return res.status(200).json({ ok: true });
     }
 
-    // 3. MENU
+    // 4. MENU
     if (cliente.estado === 'MENU') {
       if (mensagem === '1') { 
         const dados = carregarMenu();
         if(dados.length === 0) { await enviarMensagemWA(numero, "⚠️ Cardápio indisponível."); return res.status(200).json({ok:true}); }
-        let cardapio = `🍱 *Cardápio do Dia*\n🔥 *PROMOÇÃO:* Acima de 5 unid = *R$ 17,49/un*!\n\n`;
-        dados.forEach(item => { cardapio += `🔹 ${item.PRATO} – R$ ${item.VALOR}\n`; });
+        let cardapio = `🍱 *Cardápio do Dia para ${cliente.nome}*\n🔥 *PROMOÇÃO:* Acima de 5 unid = *R$ 0,01/un*!\n\n`;
+        dados.forEach(item => { cardapio += `🔹 ${item.PRATO} – R$ 0,05\n`; });
         cardapio += `\nPara fazer seu pedido, digite *2*.\nOu digite *0* para voltar.`;
         cliente.estado = 'VENDO_CARDAPIO';
         cliente.ultimaMensagem = cardapio; 
@@ -373,7 +430,7 @@ app.post('/mensagem', async (req, res) => {
       }
       if (mensagem === '2') {
         const dados = carregarMenu();
-        let lista = `🍽️ *Vamos montar seu pedido!*\n🔥 *PROMOÇÃO:* Acima de 5 unid = *R$ 17,49/un*\n\nDigite o NÚMERO do prato que deseja:\n\n`;
+        let lista = `🍽️ *Vamos montar seu pedido, ${cliente.nome}!* 😋\n\nDigite o NÚMERO do prato que deseja:\n\n`;
         dados.forEach((item, i) => { lista += `${i + 1}️⃣  ${item.PRATO}\n`; });
         lista += `\n0️⃣ Voltar`;
         cliente.estado = 'ESCOLHENDO_PRATO';
@@ -384,16 +441,16 @@ app.post('/mensagem', async (req, res) => {
       }
       if (mensagem === '3') { 
         cliente.estado = 'ELOGIOS';
-        await enviarMensagemWA(numero, `💬 *Espaço do Cliente*\nEscreva abaixo seu elogio, sugestão ou reclamação:\n\n(Digite 0 para voltar)`); 
+        await enviarMensagemWA(numero, `💬 *Espaço do Cliente*\n${cliente.nome}, escreva abaixo seu elogio, sugestão ou reclamação:\n\n(Digite 0 para voltar)`); 
         return res.status(200).json({ ok: true });
       }
-      if (mensagem === '0') { await enviarMensagemWA(numero, menuPrincipal()); return res.status(200).json({ ok: true }); }
+      if (mensagem === '0') { await enviarMensagemWA(numero, menuPrincipal(cliente.nome)); return res.status(200).json({ ok: true }); }
       
-      await enviarMensagemWA(numero, msgNaoEntendi(menuPrincipal()));
+      await enviarMensagemWA(numero, msgNaoEntendi(menuPrincipal(cliente.nome)));
       return res.status(200).json({ ok: true });
     }
 
-    // 4. LEITURA
+    // 5. LEITURA
     if (cliente.estado === 'VENDO_CARDAPIO') {
        if (mensagem === '2') {
          const dados = carregarMenu();
@@ -407,18 +464,18 @@ app.post('/mensagem', async (req, res) => {
        }
        if (mensagem === '0') {
          cliente.estado = 'MENU';
-         await enviarMensagemWA(numero, menuPrincipal());
+         await enviarMensagemWA(numero, menuPrincipal(cliente.nome));
          return res.status(200).json({ ok: true });
        }
        await enviarMensagemWA(numero, msgNaoEntendi(cliente.ultimaMensagem));
        return res.status(200).json({ ok: true });
     }
 
-    // 5. PEDIDO
+    // 6. PEDIDO
     if (cliente.estado === 'ESCOLHENDO_PRATO') {
       if (mensagem === '0') { 
-          estadoClientes.limparCarrinhoManterMenu(numero);
-          await enviarMensagemWA(numero, menuPrincipal()); 
+          estadoClientes.limparCarrinhoManterMenu(numero); 
+          await enviarMensagemWA(numero, menuPrincipal(cliente.nome)); 
           return res.status(200).json({ ok: true }); 
       }
       
@@ -482,12 +539,13 @@ app.post('/mensagem', async (req, res) => {
       if (isNaN(qtd) || qtd < 1) { await enviarMensagemWA(numero, "❌ Por favor, digite um número válido (ex: 1, 2, 3)."); return res.status(200).json({ ok: true }); }
       cliente.pedido[cliente.pedido.length - 1].quantidade = qtd;
       cliente.estado = 'ADICIONAR_OUTRO';
-      resposta = `✅ *Adicionado!*\n\nDeseja pedir mais alguma coisa?\n\n1️⃣ Sim, escolher outro prato\n2️⃣ Não, fechar pedido`;
+      resposta = `✅ *Adicionado!*\n\nDeseja pedir mais alguma coisa, ${cliente.nome}?\n\n1️⃣ Sim, escolher outro prato\n2️⃣ Não, fechar pedido`;
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta);
       return res.status(200).json({ ok: true });
     }
 
+    // 7. FECHAMENTO (JÁ TEM NOME, VAI PRO CEP)
     if (cliente.estado === 'ADICIONAR_OUTRO') {
       if (mensagem === '1' || mensagem.includes('sim')) {
         cliente.estado = 'ESCOLHENDO_PRATO';
@@ -500,22 +558,24 @@ app.post('/mensagem', async (req, res) => {
         return res.status(200).json({ ok: true });
       }
       if (mensagem === '2' || mensagem.includes('nao') || mensagem.includes('não')) {
+        
         const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
-        let valorUnitario = 0.05;
-        let textoPreco = "R$ 0.05/un";
+        let valorUnitario = 0.05; // TESTE
+        let textoPreco = "R$ 0,05/un";
         let msgPromo = "";
 
         if (totalMarmitas >= 5) {
-          valorUnitario = 0.01;
-          textoPreco = "~R$ 0.05~ por *R$ 0.01* a unidade";
-          msgPromo = "🎉 *PARABÉNS! PROMOÇÃO APLICADA!* (Acima de 5 un)\n";
+          valorUnitario = 0.01; // TESTE
+          textoPreco = "R$ 0,01 (Promoção)"; 
+          msgPromo = "🎉 *PROMOÇÃO APLICADA!* (Acima de 5 un)\n";
         }
 
         const subtotal = (totalMarmitas * valorUnitario).toFixed(2);
-        
-        // MUDANÇA V11: Agora pede o CEP, não mais o bairro escrito
+
+        // PULA DIRETO PARA O CEP
         cliente.estado = 'AGUARDANDO_CEP'; 
-        resposta = `${msgPromo}🥡 *Resumo do Pedido:*\nMarmitas: ${totalMarmitas}\nValor: ${textoPreco}\n💰 *Subtotal: R$ ${subtotal}* (Sem frete)\n------------------------------\n\n📍 Para calcular a entrega, digite seu *CEP* (apenas números):`;
+        resposta = `📝 *Resumo do Pedido de ${cliente.nome}:*\n\n${msgPromo}Marmitas: ${totalMarmitas}\nValor: ${textoPreco}\n💰 *Subtotal: R$ ${subtotal}* (Sem frete)\n------------------------------\n\n📍 Para calcular a entrega, digite seu *CEP* (apenas números):`;
+        
         cliente.ultimaMensagem = resposta;
         await enviarMensagemWA(numero, resposta); 
         return res.status(200).json({ ok: true });
@@ -523,42 +583,36 @@ app.post('/mensagem', async (req, res) => {
       
       if (mensagem === '0') {
          estadoClientes.limparCarrinhoManterMenu(numero);
-         await enviarMensagemWA(numero, menuPrincipal());
+         await enviarMensagemWA(numero, menuPrincipal(cliente.nome));
          return res.status(200).json({ ok: true });
       }
       await enviarMensagemWA(numero, msgNaoEntendi(cliente.ultimaMensagem));
       return res.status(200).json({ ok: true });
     }
 
-    // 6. CÁLCULO DE FRETE VIA GOOGLE MAPS (CEP) - NOVO!
+    // 8. CÁLCULO DE FRETE
     if (cliente.estado === 'AGUARDANDO_CEP') {
-      
       await enviarMensagemWA(numero, "🔍 Calculando rota no Google Maps... Só um instante.");
-
-      // CHAMA A FUNÇÃO NOVA
       const frete = await calcularFreteGoogle(texto);
       
       if (frete.erro) {
           await enviarMensagemWA(numero, frete.msg);
-          // Mantém no estado CEP para ele tentar de novo
           return res.status(200).json({ ok: true });
       }
 
-      // SUCESSO NO FRETE
       cliente.endereco = `CEP: ${texto} (${frete.endereco})`; 
       
       const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
-      const valorUnitario = totalMarmitas >= 5 ? 0.01 : 0.05;
+      const valorUnitario = totalMarmitas >= 5 ? 0.01 : 0.05; // TESTE
       const subtotalMarmitas = totalMarmitas * valorUnitario;
 
       const totalComFrete = subtotalMarmitas + frete.valor;
       const textoFrete = frete.texto;
       cliente.valorFrete = frete.valor; 
-
       cliente.totalFinal = totalComFrete;
       cliente.estado = 'CONFIRMANDO_ENDERECO_COMPLEMENTO';
       
-      resposta = `✅ *Localizado!*\n📍 ${frete.endereco}\n📏 Distância: ${frete.km.toFixed(1)}km\n🚚 Frete: *${textoFrete}*\n\nPor favor, digite o *NÚMERO DA CASA* e *COMPLEMENTO* (Ex: Casa rosa, portão preto):`;
+      resposta = `✅ *Localizado!*\n📍 ${frete.endereco}\n📏 Distância: ${frete.km.toFixed(1)}km\n🚚 Frete: *${textoFrete}*\n\n${cliente.nome}, por favor digite o *NÚMERO DA CASA* e *COMPLEMENTO*:`;
       cliente.ultimaMensagem = resposta;
       await enviarMensagemWA(numero, resposta); 
       return res.status(200).json({ ok: true });
@@ -568,36 +622,36 @@ app.post('/mensagem', async (req, res) => {
         cliente.endereco += ` - Compl: ${texto}`;
         cliente.estado = 'ESCOLHENDO_PAGAMENTO';
         
-        resposta = `📝 *Fechamento da Conta:*\n💰 *TOTAL FINAL: R$ ${cliente.totalFinal.toFixed(2)}*\n\n🚚 *Entrega prevista: de 3 a 5 dias* (Sob encomenda)\n\n💳 *Como deseja pagar?*\n1️⃣ PIX (Aprovação Imediata)\n2️⃣ Cartão de Crédito/Débito (Link)`;
+        resposta = `📝 *Fechamento da Conta:*\n👤 Cliente: ${cliente.nome}\n💰 *TOTAL FINAL: R$ ${cliente.totalFinal.toFixed(2)}* (Teste)\n\n🚚 *Entrega prevista: de 3 a 5 dias* (Sob encomenda)\n\n💳 *Como deseja pagar?*\n1️⃣ PIX (Aprovação Imediata)\n2️⃣ Cartão de Crédito/Débito (Link)`;
         cliente.ultimaMensagem = resposta;
         await enviarMensagemWA(numero, resposta);
         return res.status(200).json({ ok: true });
     }
 
-    // 7. PAGAMENTO ONLINE
+    // 9. PAGAMENTO
     if (cliente.estado === 'ESCOLHENDO_PAGAMENTO') {
       cliente.pagamento = texto; 
 
       if (mensagem === '1' || mensagem.includes('pix')) {
-         await enviarMensagemWA(numero, "💠 *Gerando PIX Copia e Cola...* Aguarde um instante.");
-         const dadosPix = await gerarPix(cliente.totalFinal, "Cliente Marmita", numero);
+         await enviarMensagemWA(numero, "💠 *Gerando PIX Copia e Cola...*");
+         const dadosPix = await gerarPix(cliente.totalFinal, cliente.nome, numero);
          
          if (dadosPix) {
              await enviarMensagemWA(numero, `Aqui está seu código PIX:`);
              await enviarMensagemWA(numero, dadosPix.copiaCola); 
-             await enviarMensagemWA(numero, `✅ *Copie e cole no seu banco.*\nAssim que pagar, seu pedido será processado automaticamente!`);
+             await enviarMensagemWA(numero, `✅ *Copie e cole no seu banco.*`);
          } else {
-             await enviarMensagemWA(numero, "⚠️ O sistema do banco demorou. Tente novamente em alguns segundos.");
+             await enviarMensagemWA(numero, "⚠️ Erro no PIX. Tente novamente.");
          }
       } 
       else if (mensagem === '2' || mensagem.includes('cartao') || mensagem.includes('cartão')) {
-         await enviarMensagemWA(numero, "💳 *Gerando Link Seguro...* Aguarde.");
+         await enviarMensagemWA(numero, "💳 *Gerando Link de Teste...*");
          const link = await gerarLinkPagamento(cliente.pedido, cliente.valorFrete, numero);
          
          if (link) {
-             await enviarMensagemWA(numero, `✅ Clique abaixo para pagar com Cartão:\n\n${link}`);
+             await enviarMensagemWA(numero, `✅ Clique para pagar (Teste):\n\n${link}`);
          } else {
-             await enviarMensagemWA(numero, "⚠️ Não consegui gerar o link agora. Tente novamente.");
+             await enviarMensagemWA(numero, "⚠️ Erro no Link. Tente novamente.");
          }
       }
       else {
@@ -609,15 +663,16 @@ app.post('/mensagem', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    // 8. ELOGIOS
+    // 10. ELOGIOS
     if (cliente.estado === 'ELOGIOS') {
       console.log(`[FEEDBACK] Cliente ${numero}: ${texto}`);
       cliente.estado = 'MENU';
-      await enviarMensagemWA(numero, `✅ Obrigado! Sua mensagem foi registrada.\n\n` + menuPrincipal());
+      await enviarMensagemWA(numero, `✅ Obrigado! Sua mensagem foi registrada.\n\n` + menuPrincipal(cliente.nome));
       return res.status(200).json({ ok: true });
     }
 
-    await enviarMensagemWA(numero, saudacaoTexto() + `\n\n` + menuPrincipal());
+    // SAUDAÇÃO INICIAL (SE DER ERRO DE FLUXO)
+    await enviarMensagemWA(numero, `👋 Olá! Bem-vindo de volta, ${cliente.nome || 'Visitante'}!\n\n` + menuPrincipal(cliente.nome));
     return res.status(200).json({ ok: true });
 
   } catch (error) {
