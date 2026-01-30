@@ -5,7 +5,7 @@ const axios = require('axios');
 const { MercadoPagoConfig, Payment, Preference } = require('mercadopago');
 
 // ==============================================================================
-// 🧠 MEMÓRIA DO ROBÔ (Com suporte a NOME)
+// 🧠 MEMÓRIA DO ROBÔ
 // ==============================================================================
 const clientes = {};
 
@@ -15,7 +15,7 @@ const estadoClientes = {
       clientes[numero] = { 
         estado: 'INICIAL', 
         pedido: [], 
-        nome: '', // 🆕 Campo para guardar o nome
+        nome: '', 
         recebeuSaudacao: false,
         ultimoContato: Date.now()
       };
@@ -46,12 +46,12 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ==============================================================================
-// ⚙️ ÁREA DE CONFIGURAÇÃO
+// ⚙️ ÁREA DE CONFIGURAÇÃO (SEUS DADOS REAIS + MODO TESTE)
 // ==============================================================================
 
 const NUMERO_ADMIN = '5551984050946'; 
 
-// SEUS TOKENS DO ARQUIVO ENVIADO
+// SEUS TOKENS (Mantidos do arquivo enviado)
 const MP_ACCESS_TOKEN = 'APP_USR-3976540518966482-012110-64c2873d7929c168846b389d4f6c311e-281673709'; 
 const WASENDER_TOKEN = process.env.WASENDER_TOKEN || '399f73920f6d3300e39fc9f8f0e34eb40510a8a14847e288580d5d10e40cdae4'; 
 const URL_DO_SEU_SITE = 'https://mmmelhormarmita.onrender.com';
@@ -70,7 +70,7 @@ const timersClientes = {};
 const client = new MercadoPagoConfig({ accessToken: MP_ACCESS_TOKEN, options: { timeout: 5000 } });
 
 // ==============================================================================
-// 🗺️ INTELIGÊNCIA DE FRETE (GOOGLE MAPS)
+// 🗺️ INTELIGÊNCIA DE FRETE (GOOGLE MAPS) - VALORES DE TESTE
 // ==============================================================================
 
 async function calcularFreteGoogle(cepDestino) {
@@ -106,7 +106,7 @@ async function calcularFreteGoogle(cepDestino) {
     console.log(`📏 Distância encontrada: ${distanciaKm.toFixed(2)} km`);
 
     // =======================================================================
-    // 🧪 TABELA DE PREÇOS
+    // 🧪 TABELA DE PREÇOS DE TESTE (CENTAVOS PARA TESTAR MAPAS)
     // =======================================================================
     
     if (distanciaKm <= 3.0) return { valor: 0.01, texto: "R$ 0,01 (Teste Perto)", endereco: enderecoGoogle, km: distanciaKm };
@@ -123,7 +123,7 @@ async function calcularFreteGoogle(cepDestino) {
 }
 
 // ==============================================================================
-// 💰 FUNÇÕES DE PAGAMENTO
+// 💰 FUNÇÕES DE PAGAMENTO (PREÇOS DE TESTE)
 // ==============================================================================
 
 async function gerarPix(valor, clienteNome, clienteTelefone) {
@@ -204,7 +204,7 @@ function pad(str, length) { return (str + '                                     
 function padL(str, length) { return ('                                        ' + str).slice(-length); }
 
 // ==============================================================================
-// 🔔 WEBHOOK ATUALIZADO (V13 - NOTA FISCAL + NOME)
+// 🔔 WEBHOOK ATUALIZADO (V13.1 - TRAVA DE ESTADO + ENDEREÇO FULL)
 // ==============================================================================
 
 app.post('/webhook', async (req, res) => {
@@ -231,6 +231,9 @@ app.post('/webhook', async (req, res) => {
          let subtotalVal = 0;
 
          if (memoria) {
+             // 🔒 TRAVA DE SEGURANÇA: CLIENTE PAGO NÃO CANCELA MAIS
+             memoria.estado = 'FINALIZADO'; 
+             
              nomeCliente = memoria.nome || "Cliente";
              if (memoria.valorFrete) valorFrete = memoria.valorFrete.toFixed(2);
              if (memoria.endereco) endereco = memoria.endereco;
@@ -259,7 +262,7 @@ app.post('/webhook', async (req, res) => {
 
          console.log(`✅ Pagamento Aprovado! Cliente: ${numeroCliente}`);
          
-         // 🧾 O CUPOM FORMATADO
+         // 🧾 O CUPOM FORMATADO (SEM CORTAR ENDEREÇO)
          const comprovante = 
 `\`\`\`
 🧾 MELHOR MARMITA - PEDIDO #${data.id.slice(-4)}
@@ -276,7 +279,7 @@ FRETE:             R$ ${valorFrete}
 TOTAL FINAL:       R$ ${valorPago.toFixed(2)}
 --------------------------------
 📍 ENTREGA:
-${endereco.substring(0,30)}...
+${endereco}
 --------------------------------
 ID TRANS: ${data.id}
 ✅ PAGAMENTO APROVADO
@@ -321,7 +324,7 @@ function iniciarTimerInatividade(numero) {
   if (timersClientes[numero]) clearTimeout(timersClientes[numero]);
   timersClientes[numero] = setTimeout(async () => {
     const cliente = estadoClientes.getEstado(numero);
-    if (cliente.estado !== 'INICIAL' && cliente.estado !== 'MENU') {
+    if (cliente.estado !== 'INICIAL' && cliente.estado !== 'MENU' && cliente.estado !== 'FINALIZADO') {
       estadoClientes.resetarCliente(numero); 
       await enviarMensagemWA(numero, `💤 *Atendimento encerrado por falta de interação.*`);
     }
@@ -343,7 +346,7 @@ async function enviarMensagemWA(numero, texto) {
 // 🚀 ROTAS (LÓGICA PRINCIPAL)
 // ==============================================================================
 
-app.get('/', (req, res) => { res.send('🤖 Bot V13 (NOME + MAPS + NF) ON 🚀'); });
+app.get('/', (req, res) => { res.send('🤖 Bot V13.1 (TRAVA CANCELAR + FIX ENDEREÇO) ON 🚀'); });
 
 app.post('/mensagem', async (req, res) => {
   try {
@@ -401,8 +404,15 @@ app.post('/mensagem', async (req, res) => {
         return res.status(200).json({ ok: true });
     }
     
-    // 3. CANCELAR
+    // 3. CANCELAR (COM TRAVA DE SEGURANÇA 🔒)
     if (mensagem === 'cancelar') {
+      
+      // SE JÁ PAGOU, NÃO CANCELA
+      if (cliente.estado === 'FINALIZADO') {
+         await enviarMensagemWA(numero, `⚠️ *Pedido já pago e confirmado!* \n\nO robô não pode cancelar agora pois a cozinha já recebeu seu pedido. \nPor favor, entre em contato direto pelo WhatsApp se precisar de ajuda.`);
+         return res.status(200).json({ ok: true });
+      }
+
       const nomeSalvo = cliente.nome; // Guarda o nome pra não perder
       estadoClientes.resetarCliente(numero); 
       const reset = estadoClientes.getEstado(numero);
@@ -662,8 +672,21 @@ app.post('/mensagem', async (req, res) => {
       cliente.estado = 'FINALIZADO';
       return res.status(200).json({ ok: true });
     }
+    
+    // 10. ESTADO FINALIZADO (Se o cliente mandar msg depois de pagar)
+    if (cliente.estado === 'FINALIZADO') {
+       if (mensagem === 'menu' || mensagem === '0') {
+           // Permite começar um pedido NOVO se ele pedir explicitamente menu
+           estadoClientes.resetarCliente(numero);
+           await enviarMensagemWA(numero, menuPrincipal());
+           return res.status(200).json({ ok: true });
+       }
+       // Senão, ignora ou agradece
+       await enviarMensagemWA(numero, `👋 Olá, ${cliente.nome}! Seu pedido anterior já está sendo preparado. \n\nSe quiser fazer um *novo pedido*, digite *MENU*.`);
+       return res.status(200).json({ ok: true });
+    }
 
-    // 10. ELOGIOS
+    // 11. ELOGIOS
     if (cliente.estado === 'ELOGIOS') {
       console.log(`[FEEDBACK] Cliente ${numero}: ${texto}`);
       cliente.estado = 'MENU';
