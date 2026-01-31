@@ -117,11 +117,11 @@ async function calcularFreteGoogle(cepDestino) {
     const distanciaKm = elemento.distance.value / 1000;
     const enderecoGoogle = data.destination_addresses[0]; 
 
-    // TABELA DE PREÇOS (TESTE R$ 1.00+)
-    if (distanciaKm <= 3.0) return { valor: 1.01, texto: "R$ 1,01", endereco: enderecoGoogle };
-    if (distanciaKm <= 6.0) return { valor: 1.02, texto: "R$ 1.02", endereco: enderecoGoogle };
-    if (distanciaKm <= 15.0) return { valor: 1.03, texto: "R$ 1,03", endereco: enderecoGoogle };
-    if (distanciaKm <= 20.0) return { valor: 1.04, texto: "R$ 1,04", endereco: enderecoGoogle };
+    // TABELA DE PREÇOS
+    if (distanciaKm <= 3.0) return { valor: 5.00, texto: "R$ 5.00", endereco: enderecoGoogle };
+    if (distanciaKm <= 6.0) return { valor: 8.00, texto: "R$ 8.00", endereco: enderecoGoogle };
+    if (distanciaKm <= 15.0) return { valor: 15.00, texto: "R$ 15.00", endereco: enderecoGoogle };
+    if (distanciaKm <= 20.0) return { valor: 20.00, texto: "R$ 20.00", endereco: enderecoGoogle };
 
     return { erro: true, msg: "🚫 Endereço fora da área de entrega." };
   } catch (error) {
