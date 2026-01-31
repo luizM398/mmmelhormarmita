@@ -351,15 +351,23 @@ async function enviarMensagemWA(numero, texto) {
 async function enviarDocumentoWA(numero, base64, nomeArquivo) {
   const numeroLimpo = String(numero).replace(/\D/g, '');
   try {
-    await axios.post('https://www.wasenderapi.com/api/send-document', // Endpoint para documentos
+    // Trocando /api/send-document por /api/send-file
+    await axios.post('https://www.wasenderapi.com/api/send-file', 
       { 
         to: numeroLimpo, 
-        document: base64, // Aqui vai a string Base64
+        file: base64, // Algumas APIs usam 'file' em vez de 'document'
         fileName: nomeArquivo 
       }, 
-      { headers: { Authorization: `Bearer ${WASENDER_TOKEN}`, 'Content-Type': 'application/json' } }
+      { 
+        headers: { 
+          'Authorization': `Bearer ${process.env.WASENDER_TOKEN}`, // Garante que usa o Token do ambiente
+          'Content-Type': 'application/json' 
+        } 
+      }
     );
-  } catch (err) { console.error(`Erro envio doc:`, err.message); }
+  } catch (err) { 
+    console.error(`Erro envio doc:`, err.response ? err.response.data : err.message); 
+  }
 }
 // ==============================================================================
 // 🚀 ROTAS
