@@ -433,7 +433,7 @@ app.post('/mensagem', async (req, res) => {
         const dados = carregarMenu();
         if(dados.length === 0) { await enviarMensagemWA(numero, "⚠️ Cardápio indisponível."); return res.status(200).json({ok:true}); }
         let cardapio = `🍱 *Cardápio do Dia para ${cliente.nome}*\n🔥 *PROMOÇÃO:* Acima de 5 unid = *R$ 0,01/un*!\n\n`;
-        dados.forEach(item => { cardapio += `🔹 ${item.PRATO} – R$ 0,05\n`; });
+        dados.forEach(item => { cardapio += `🔹 ${item.PRATO} – R$ 19,99\n`; });
         cardapio += `\nPara fazer seu pedido, digite *2*.\nOu digite *0* para voltar.`;
         cliente.estado = 'VENDO_CARDAPIO';
         cliente.ultimaMensagem = cardapio; 
@@ -496,7 +496,7 @@ app.post('/mensagem', async (req, res) => {
       const prato = cliente.opcoesPrato[escolha - 1];
       const nomePrato = prato.PRATO.toLowerCase();
       
-      cliente.pedido.push({ prato: prato.PRATO, valor: 0.05, arroz: null, strogonoff: null, quantidade: 0 });
+      cliente.pedido.push({ prato: prato.PRATO, valor: 19.99, arroz: null, strogonoff: null, quantidade: 0 });
       cliente.precisaArroz = nomePrato.includes('arroz');
       cliente.precisaStrogonoff = nomePrato.includes('strogonoff');
 
@@ -573,8 +573,8 @@ app.post('/mensagem', async (req, res) => {
       if (mensagem === '2' || mensagem.includes('nao') || mensagem.includes('não')) {
         
         const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
-        let valorUnitario = 0.05; // TESTE
-        let textoPreco = "R$ 0,05/un";
+        let valorUnitario = 19.99;
+        let textoPreco = "R$ 19,99/un";
         let msgPromo = "";
 
         if (totalMarmitas >= 5) {
