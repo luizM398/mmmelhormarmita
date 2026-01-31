@@ -367,26 +367,36 @@ app.post('/mensagem', async (req, res) => {
     if (!texto || !numero) return res.status(200).json({ ok: true });
     const mensagem = texto.trim().toLowerCase();
     
-    // ⏰ HORÁRIO
-    const dataBrasil = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Sao_Paulo"}));
-    const diaSemana = dataBrasil.getDay(); 
-    const horaAtual = dataBrasil.getHours();
+    // ⏰ CONTROLE DE HORÁRIO
+const dataBrasil = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+const diaSemana = dataBrasil.getDay(); 
+const horaAtual = dataBrasil.getHours();
 
-    if (horaAtual < 8 || horaAtual >= 22) {
-       if (numero !== NUMERO_ADMIN) {
-         await enviarMensagemWA(numero, `🚫 *Olá! A Melhor Marmita está fechada agora.*\n\n⏰ Nosso horário de atendimento é:\nSegunda a Sexta, das 08h às 18h.\n\nEsperamos seu contato no horário comercial! 👋`);
-         return res.status(200).json({ ok: true });
-       }
+const isFinalDeSemana = (diaSemana === 0 || diaSemana === 6);
+const isForaDoHorario = (horaAtual < 8 || horaAtual >= 18);
+
+if (isFinalDeSemana || isForaDoHorario) {
+    if (numero !== NUMERO_ADMIN) {
+        const avisoFechado = `🍱 *Olá! A Melhor Marmita agradece seu contato.*\n\n` +
+                             `🚫 No momento estamos *FECHADOS*.\n\n` +
+                             `⏰ *Nosso horário de atendimento:*\n` +
+                             `🗓️ Segunda a Sexta\n` +
+                             `🕒 Das 08h às 18h\n\n` +
+                             `Sua mensagem foi recebida e responderemos assim que iniciarmos nosso expediente! 👋`;
+
+        await enviarMensagemWA(numero, avisoFechado);
+        return res.status(200).json({ ok: true });
     }
+}
 
-    iniciarTimerInatividade(numero);
-    
-    const cliente = estadoClientes.getEstado(numero);
-    cliente.ultimoContato = Date.now();
-    let resposta = '';
+// ⚙️ PROCESSAMENTO DO CLIENTE
+iniciarTimerInatividade(numero);
 
-    console.log(`📩 Cliente ${numero}: "${mensagem}"`);
+const cliente = estadoClientes.getEstado(numero);
+cliente.ultimoContato = Date.now();
+let resposta = '';
 
+console.log(`📩 Cliente ${numero}: "${mensagem}"`);
     // 1. SAUDAÇÃO
     if (!cliente.recebeuSaudacao) {
       cliente.recebeuSaudacao = true;
