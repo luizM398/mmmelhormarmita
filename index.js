@@ -286,15 +286,8 @@ ${resumoItensAdmin}
 --------------------------------
 ✅ *Status:* PAGO`;
 
-             // 1. Prepara o texto (removemos as crases para o arquivo ficar limpo)
-const textoParaArquivo = cupomCliente.replace(/```/g, '');
-
-// 2. Converte o texto para Base64 (O "tradutor" que comentamos)
-const base64Cupom = Buffer.from(textoParaArquivo).toString('base64');
-
-// 3. Envia a mensagem de texto E o arquivo .txt
-await enviarMensagemWA(numeroCliente, `Aqui está seu comprovante detalhado:`);
-await enviarDocumentoWA(numeroCliente, base64Cupom, `Comprovante_Pedido_${data.id.slice(-4)}.txt`);
+             await enviarMensagemWA(numeroCliente, `Aqui está seu comprovante detalhado:`);
+             await enviarMensagemWA(numeroCliente, cupomCliente);
              await enviarMensagemWA(numeroCliente, `Muito obrigado, ${memoria.nome}! Já enviamos para a cozinha. 🍱🔥`);
              await enviarMensagemWA(NUMERO_ADMIN, msgAdmin);
          }
@@ -348,27 +341,6 @@ async function enviarMensagemWA(numero, texto) {
   } catch (err) { console.error(`Erro envio msg:`, err.message); }
 }
 
-async function enviarDocumentoWA(numero, base64, nomeArquivo) {
-  const numeroLimpo = String(numero).replace(/\D/g, '');
-  try {
-    // Trocando /api/send-document por /api/send-file
-    await axios.post('https://www.wasenderapi.com/api/send-file', 
-      { 
-        to: numeroLimpo, 
-        file: base64, // Algumas APIs usam 'file' em vez de 'document'
-        fileName: nomeArquivo 
-      }, 
-      { 
-        headers: { 
-          'Authorization': `Bearer ${process.env.WASENDER_TOKEN}`, // Garante que usa o Token do ambiente
-          'Content-Type': 'application/json' 
-        } 
-      }
-    );
-  } catch (err) { 
-    console.error(`Erro envio doc:`, err.response ? err.response.data : err.message); 
-  }
-}
 // ==============================================================================
 // 🚀 ROTAS
 // ==============================================================================
