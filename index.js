@@ -155,7 +155,7 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
     const items = itens.map(item => ({
       title: item.prato,
       quantity: Number(item.quantidade),
-      unit_price: Number(item.quantidade >= 5 ? 0.01 : 0.05),
+      unit_price: Number(item.quantidade >= 5 ? 17.49 : 19.99),
       currency_id: 'BRL'
     }));
 
@@ -226,7 +226,7 @@ app.post('/webhook', async (req, res) => {
                      nomeExibicao = nomeExibicao.replace(/strogonoff/gi, 'strogonoff LIGHT');
                  }
 
-                 const precoItem = item.quantidade >= 5 ? 0.01 : 0.05;
+                 const precoItem = item.quantidade >= 5 ? 17.49 : 19.99;
                  const totalItem = item.quantidade * precoItem;
                  subtotalVal += totalItem;
 
@@ -578,8 +578,8 @@ app.post('/mensagem', async (req, res) => {
         let msgPromo = "";
 
         if (totalMarmitas >= 5) {
-          valorUnitario = 0.01; // TESTE
-          textoPreco = "R$ 0,01 (Promoção)"; 
+          valorUnitario = 17.49;
+          textoPreco = "R$ 19,49 (Promoção)"; 
           msgPromo = "🎉 *PROMOÇÃO APLICADA!* (Acima de 5 un)\n";
         }
 
@@ -613,7 +613,7 @@ app.post('/mensagem', async (req, res) => {
       cliente.endereco = `CEP: ${texto} (${frete.endereco})`; 
       
       const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
-      const valorUnitario = totalMarmitas >= 5 ? 0.01 : 0.05; // TESTE
+      const valorUnitario = totalMarmitas >= 5 ? 17.49 : 19.99; // TESTE
       const subtotalMarmitas = totalMarmitas * valorUnitario;
 
       const totalComFrete = subtotalMarmitas + frete.valor;
