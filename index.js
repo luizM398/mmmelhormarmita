@@ -15,7 +15,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // 👇 SEU NÚMERO PARA RECEBER OS FEEDBACKS (Dedo Duro Ativado 🚨)
-const NUMERO_ADMIN = '5551985013496@c.us'; 
+const NUMERO_ADMIN = process.env.NUMERO_ADMIN; 
 
 // 🗺️ CONFIGURAÇÃO MAPBOX
 const MAPBOX_ACCESS_TOKEN = process.env.MAPBOX_ACCESS_TOKEN; 
