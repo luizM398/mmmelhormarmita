@@ -241,7 +241,6 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
   }
 }
 
-JavaScript
 // ----------------------------------------------------------------------
 // 🔔 RECEBIMENTO E CONFIRMAÇÃO (WEBHOOK) - VERSÃO ORIGINAL SEGURA
 // ----------------------------------------------------------------------
