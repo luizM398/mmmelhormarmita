@@ -1,9 +1,17 @@
-require('dotenv').config(); // 👈 IMPORTANTE: Para ler suas chaves do .env
+require('dotenv').config(); 
 const express = require('express');
 const path = require('path');
 const axios = require('axios');
-const xlsx = require('xlsx'); // 👈 IMPORTANTE: Para ler seu cardápio em Excel
+const xlsx = require('xlsx'); 
 const { MercadoPagoConfig, Payment, Preference } = require('mercadopago');
+
+// 👇👇 AQUI ESTAVA FALTANDO ESSAS 4 LINHAS: 👇👇
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+// 👆👆 FIM DA CORREÇÃO 👆👆
 
 // 🧠 MEMÓRIA DO SISTEMA
 const clientes = {};
