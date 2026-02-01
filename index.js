@@ -91,7 +91,7 @@ async function calcularFreteGoogle(cepDestino) {
     
     let valor = 15.00;
     let texto = "R$ 15,00";
-    if (distanciaKm <= 2.0) { valor = 5.00; texto = "R$ 5,00"; }
+    if (distanciaKm <= 2.0) { valor = 1.00; texto = "R$ 5,00"; }
     else if (distanciaKm <= 5.0) { valor = 8.00; texto = "R$ 8,00"; }
     else if (distanciaKm <= 10.0) { valor = 12.00; texto = "R$ 12,00"; }
     
@@ -135,7 +135,7 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
     
     // Calcula o total de marmitas para aplicar a promoção
     const totalMarmitas = itens.reduce((acc, i) => acc + i.quantidade, 0);
-    const precoUnitario = totalMarmitas >= 5 ? 17.49 : 19.99;
+    const precoUnitario = totalMarmitas >= 5 ? 0.01 : 19.99;
 
     const items = itens.map(item => ({
       title: item.prato,
@@ -203,7 +203,7 @@ app.post('/webhook', async (req, res) => {
                 nomeExibicao = nomeExibicao.replace(/cnoura/gi, 'cenoura');
                 nomeExibicao = nomeExibicao.charAt(0).toUpperCase() + nomeExibicao.slice(1);
 
-                const precoItem = memoria.totalMarmitas >= 5 ? 17.49 : 19.99;
+                const precoItem = memoria.totalMarmitas >= 5 ? 0.01 : 19.99;
                 const totalItem = item.quantidade * precoItem;
                 subtotalVal += totalItem;
 
@@ -582,7 +582,7 @@ if (cliente.estado === 'ADICIONAR_OUTRO') {
     const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
     
     // Regra de Promoção (Preços oficiais)
-    let valorUnitario = totalMarmitas >= 5 ? 17.49 : 19.99; 
+    let valorUnitario = totalMarmitas >= 5 ? 0.01 : 19.99; 
     let textoPreco = totalMarmitas >= 5 ? "R$ 17,49 (Promoção)" : "R$ 19,99/un";
     let msgPromo = totalMarmitas >= 5 ? "🎉 *PROMOÇÃO APLICADA!* (Acima de 5 un)\n" : "";
 
@@ -635,7 +635,7 @@ if (cliente.estado === 'AGUARDANDO_CEP') {
     
     const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
     // Preços Oficiais: 17.49 (Promo) ou 19.99 (Normal)
-    const valorUnitario = totalMarmitas >= 5 ? 17.49 : 19.99;
+    const valorUnitario = totalMarmitas >= 5 ? 0.01 : 19.99;
     const subtotalMarmitas = totalMarmitas * valorUnitario;
 
     const totalComFrete = subtotalMarmitas + frete.valor;
