@@ -246,7 +246,7 @@ TOTAL PAGO:         R$ ${valorPago.toFixed(2)}
 // 🏠 MENU PRINCIPAL
 function menuPrincipal(nomeCliente) {
   const nomeDisplay = nomeCliente ? ` ${nomeCliente}` : '';
-  return `🔻 *Menu Principal para${nomeDisplay}*\n\n1️⃣  Ver Cardápio (400g) 🍱\n2️⃣  Fazer Pedido 🛒\n3️⃣  Elogios ou Reclamações 💬\n\n_Escolha uma opção digitando o número._`;
+  return `🔻 *Menu Principal para${nomeDisplay}*\n\n1️⃣  Ver Cardápio 🍱\n2️⃣  Fazer Pedido 🛒\n3️⃣  Elogios ou Reclamações 💬\n\n_Escolha uma opção digitando o número._`;
 }
 
 function msgNaoEntendi(textoAnterior) {
@@ -495,7 +495,7 @@ if (cliente.estado === 'ESCOLHENDO_PRATO') {
     proximaResposta = `🍛 *Qual tipo de strogonoff?*\n\n1️⃣ Tradicional\n2️⃣ Light`;
   } else {
     cliente.estado = 'QUANTIDADE';
-    proximaResposta = `🔢 *Quantas marmitas (400g) deste prato deseja?*`;
+    proximaResposta = `🔢 *Quantas marmitas deste prato deseja?*`;
   }
 
   cliente.ultimaMensagem = proximaResposta;
