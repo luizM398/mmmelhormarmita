@@ -755,7 +755,7 @@ if (cliente.estado === 'CONFIRMANDO_ENDERECO_COMPLEMENTO') {
     cliente.endereco += ` - Compl: ${texto}`;
     cliente.estado = 'ESCOLHENDO_PAGAMENTO';
     
-    let resumoPgto = `📝 *Fechamento da Conta:*\n👤 Cliente: ${cliente.nome}\n💰 *TOTAL FINAL: R$ ${cliente.totalFinal.toFixed(2).replace('.', ',')}*\n\n💳 *Como deseja pagar?*\n1️⃣ PIX (Aprovação Imediata)\n2️⃣ Cartão de Crédito/Débito (Link)\n\n0️⃣ Voltar para o CEP`;
+    let resumoPgto = `📝 *Fechamento da Conta:*\n👤 Cliente: ${cliente.nome}\n💰 *TOTAL FINAL: R$ ${cliente.totalFinal.toFixed(2).replace('.', ',')}*\n\n💳 *Como deseja pagar?*\n1️⃣ PIX (Aprovação Imediata)\n2️⃣ Cartão de Crédito/Débito (Link)`;
     
     cliente.ultimaMensagem = resumoPgto;
     await enviarMensagemWA(numero, resumoPgto);
