@@ -241,8 +241,9 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
   }
 }
 
+JavaScript
 // ----------------------------------------------------------------------
-// 🔔 RECEBIMENTO E CONFIRMAÇÃO (WEBHOOK) - VISUAL PERFEITO 📐
+// 🔔 RECEBIMENTO E CONFIRMAÇÃO (WEBHOOK) - VERSÃO ORIGINAL SEGURA
 // ----------------------------------------------------------------------
 app.post('/webhook', async (req, res) => {
   const { action, data } = req.body;
@@ -261,10 +262,6 @@ app.post('/webhook', async (req, res) => {
               memoria.pagamentoConfirmado = true;
               memoria.estado = 'FINALIZADO';
               
-              // 📐 CONFIGURAÇÃO DO PAPEL (30 Colunas)
-              const LARGURA_PAPEL = 30; 
-              const SEPARADOR = '-'.repeat(LARGURA_PAPEL); 
-
               let resumoItens = "";     
               let resumoItensAdmin = ""; 
               let subtotalVal = 0;
@@ -272,56 +269,48 @@ app.post('/webhook', async (req, res) => {
               memoria.pedido.forEach(item => {
                 let nomeExibicao = item.prato;
 
-                // 1. Tratamento de Texto
+                // 1. Aplica as variações no texto
                 if (item.arroz === 'Integral') nomeExibicao = nomeExibicao.replace(/arroz/gi, 'Arroz Integral');
                 if (item.strogonoff === 'Light') nomeExibicao = nomeExibicao.replace(/strogonoff/gi, 'Strogonoff Light');
                 
-                // Quebras de linha estéticas
+                // 2. Formatação simples (Original)
                 nomeExibicao = nomeExibicao.replace(/,/g, ',\n  '); 
                 nomeExibicao = nomeExibicao.replace(/ e /g, '\n  e ');
+                nomeExibicao = nomeExibicao.replace(/cnoura/gi, 'cenoura'); // Aquele fix que você tinha
                 nomeExibicao = nomeExibicao.charAt(0).toUpperCase() + nomeExibicao.slice(1);
 
-                // Cálculo de Valores
+                // Define preço
                 const precoItem = memoria.totalMarmitas >= 5 ? 0.01 : 19.99;
                 const totalItem = item.quantidade * precoItem;
                 subtotalVal += totalItem;
 
-                // 2. Montagem do Item
-                resumoItens += `${item.quantidade}x ${nomeExibicao}\n`;
+                // 3. Monta o visual final
+                resumoItens += `${item.quantidade}x ${nomeExibicao.substring(0,25)}\n`;
                 
-                // ALINHAMENTO DO PREÇO (Empurra pra direita até dar 30 chars)
+                // Preço (Versão antiga que você usava)
                 const precoFormatado = `R$ ${totalItem.toFixed(2).replace('.', ',')}`;
-                resumoItens += precoFormatado.padStart(LARGURA_PAPEL, ' ') + `\n`; 
+                resumoItens += precoFormatado.padStart(30, ' ') + `\n\n`; 
 
-                // Admin
-                resumoItensAdmin += `▪️ ${item.quantidade}x ${item.prato}\n`;
+                // Resumo simples para o ADMIN
+                resumoItensAdmin += `▪️ ${item.quantidade}x ${nomeExibicao}\n`;
               });
 
               const dataBr = new Date().toLocaleDateString('pt-BR');
               const horaBr = new Date().toLocaleTimeString('pt-BR').substring(0,5);
 
-              // 3. FUNÇÃO DE ALINHAMENTO DOS TOTAIS
-              const alinhar = (rotulo, valor) => {
-                  const valorStr = `R$ ${valor.toFixed(2).replace('.', ',')}`;
-                  // Calcula quantos espaços vazios precisa no meio
-                  const espacosLivres = LARGURA_PAPEL - rotulo.length - valorStr.length;
-                  const espacos = ' '.repeat(Math.max(0, espacosLivres));
-                  return rotulo + espacos + valorStr;
-              };
-
-              // MONTAGEM DO CUPOM (Sem indentação para ficar colado na esquerda)
               const cupomCliente = `\`\`\`
-🧾 MELHOR MARMITA 🍱
-CUPOM: #${data.id.slice(-4)}
-${SEPARADOR}
+      🧾  MELHOR MARMITA  🍱
+      CUPOM: #${data.id.slice(-4)}
+--------------------------------------
 CLIENTE: ${memoria.nome.toUpperCase()}
 DATA: ${dataBr} - ${horaBr}
-${SEPARADOR}
-${resumoItens}${SEPARADOR}
-${alinhar("SUBTOTAL:", subtotalVal)}
-${alinhar("FRETE:", memoria.valorFrete)}
-${alinhar("TOTAL PAGO:", valorPago)}
-${SEPARADOR}
+--------------------------------------
+${resumoItens}
+--------------------------------------
+SUBTOTAL:           R$ ${subtotalVal.toFixed(2)}
+FRETE:              R$ ${memoria.valorFrete.toFixed(2)}
+TOTAL PAGO:         R$ ${valorPago.toFixed(2)}
+--------------------------------------
 ✅ PAGAMENTO CONFIRMADO
 \`\`\``;
 
@@ -330,8 +319,8 @@ ${SEPARADOR}
               await enviarMensagemWA(numeroCliente, cupomCliente);
               await enviarMensagemWA(numeroCliente, `Muito obrigado, ${memoria.nome}! Seu pedido já foi para a cozinha. 🍱🔥`);
               
-              // Envia pro Admin
-              const adminDestino = process.env.NUMERO_ADMIN || '5551985013496@c.us';
+              // Mantive a proteção para garantir que chega no seu número
+              const adminDestino = process.env.NUMERO_ADMIN || NUMERO_ADMIN;
               await enviarMensagemWA(adminDestino, msgAdmin); 
           }
         }
