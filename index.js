@@ -170,10 +170,11 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
         items: items,
         external_reference: String(clienteTelefone),
         back_urls: {
-          success: "https://wa.me/5551984050946?text=Oi!%20Já%20concluí%20meu%20pagamento%20pelo%20cartão!%20🍱",
-          failure: "https://wa.me/5551984050946?text=Ops...%20Tive%20um%20problema%20no%20pagamento.%20Pode%20me%20ajudar?",
-          pending: "https://wa.me/5551984050946"
-        }
+         success: "https://wa.me/5551985013496?text=Oi!%20Já%20concluí%20meu%20pagamento%20pelo%20cartão!%20🍱",
+  failure: "https://wa.me/5551985013496?text=Ops...%20Tive%20um%20problema%20no%20pagamento.%20Pode%20me%20ajudar?",
+  pending: "https://wa.me/5551985013496"
+},
+auto_return: "approved"
       }
     });
 
