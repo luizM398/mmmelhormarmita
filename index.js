@@ -447,8 +447,8 @@ if (cliente.estado === 'MENU') {
     }
 
     let cardapio = `🍱 *Cardápio do Dia para ${cliente.nome}*\n` +
-                   `⚖️ *Peso: 400g por marmita*\n` +
-                   `🔥 *PROMOÇÃO:* Acima de 5 unid o preço *CAI* para *R$ 17,49/un*!\n\n`;
+                  `🔥 *PROMOÇÃO:* Acima de 5 unid o preço *CAI* para *R$ 17,49/un*!\n` +
+                  `⚖️ Peso: 400g por marmita\n\n`;
     
     dados.forEach(item => { cardapio += `🔹 ${item.PRATO} – R$ 19,99\n`; });
     cardapio += `\nPara fazer seu pedido, digite *2*.\nOu digite *0* para voltar.`;
