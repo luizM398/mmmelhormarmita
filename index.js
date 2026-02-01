@@ -75,12 +75,12 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ⚙️ CONFIGURAÇÕES DO SISTEMA
-const NUMERO_ADMIN = '5551985013496'; 
-const MP_ACCESS_TOKEN = 'APP_USR-3976540518966482-012110-64c2873d7929c168846b389d4f6c311e-281673709'; 
-const WASENDER_TOKEN = process.env.WASENDER_TOKEN || '399f73920f6d3300e39fc9f8f0e34eb40510a8a14847e288580d5d10e40cdae4'; 
+const NUMERO_ADMIN = process.env.NUMERO_ADMIN;
+const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN; 
+const WASENDER_TOKEN = process.env.WASENDER_TOKEN; 
 const URL_DO_SEU_SITE = 'https://mmmelhormarmita.onrender.com';
-const GOOGLE_API_KEY = 'AIzaSyAc6xZjyQRgBS52UfOKc93PthX9HlMMqHw'; 
-const ORIGEM_COZINHA = 'Rua Guaíba, 10 - CEP 91560-640, Lomba do Pinheiro, Porto Alegre, RS';
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY; 
+const ORIGEM_COZINHA = process.env.ORIGEM_COZINHA;
 
 // ⏱️ GESTÃO DE TIMERS E PAGAMENTO
 const TEMPO_INATIVO = 10 * 60 * 1000; 
