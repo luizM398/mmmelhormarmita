@@ -210,34 +210,43 @@ app.post('/webhook', async (req, res) => {
              let subtotalVal = 0;
 
              memoria.pedido.forEach(item => {
-                 let nomeExibicao = item.prato;
+    let nomeExibicao = item.prato;
 
-                 if (item.arroz === 'Integral') {
-                     nomeExibicao = nomeExibicao.replace(/arroz/gi, 'arroz INTEGRAL');
-                 }
-                 if (item.strogonoff === 'Light') {
-                     nomeExibicao = nomeExibicao.replace(/strogonoff/gi, 'strogonoff LIGHT');
-                 }
+    if (item.arroz === 'Integral') {
+        nomeExibicao = nomeExibicao.replace(/arroz/gi, 'Arroz Integral');
+    }
+    if (item.strogonoff === 'Light') {
+        nomeExibicao = nomeExibicao.replace(/strogonoff/gi, 'Strogonoff Light');
+    }
 
-                 const precoItem = item.quantidade >= 5 ? 0.01 : 19.99;
-                 const totalItem = item.quantidade * precoItem;
-                 subtotalVal += totalItem;
+    nomeExibicao = nomeExibicao.replace(/cnoura/gi, 'cenoura');
+    nomeExibicao = nomeExibicao.charAt(0).toUpperCase() + nomeExibicao.slice(1);
 
-                 const qtdStr = (item.quantidade + 'x').padEnd(3);
-                 const totalStr = padL('R$ ' + totalItem.toFixed(2), 8);
-                 const limiteChar = 25; 
+    const precoItem = item.quantidade >= 5 ? 0.01 : 19.99;
+    const totalItem = item.quantidade * precoItem;
+    subtotalVal += totalItem;
+    const totalStr = 'R$ ' + totalItem.toFixed(2).replace('.', ',');
 
-                 if (nomeExibicao.length <= limiteChar) {
-                     resumoItens += `${qtdStr} ${pad(nomeExibicao, 25)} ${totalStr}\n`;
-                 } else {
-                     let corte = nomeExibicao.lastIndexOf(' ', limiteChar);
-                     if (corte === -1) corte = limiteChar;
-                     resumoItens += `${qtdStr} ${nomeExibicao.substring(0, corte)}\n`;
-                     resumoItens += `    ${pad(nomeExibicao.substring(corte + 1), 25)} ${totalStr}\n`;
-                 }
+    let partes = nomeExibicao.split(',');
+    let linha1 = (partes[0] || '').trim();
+    let linha2 = (partes[1] || '').trim();
+    let linha3 = (partes[2] || '').trim();
 
-                 resumoItensAdmin += `▪️ ${item.quantidade}x ${nomeExibicao}\n`;
-             });
+    resumoItens += `${item.quantidade}x ${linha1}\n`;
+    
+    if (linha2) {
+        resumoItens += `   ${linha2}\n`;
+    }
+    
+    if (linha3) {
+        let l3 = linha3.toLowerCase().startsWith('e ') ? linha3 : `e ${linha3}`;
+        resumoItens += `   ${l3}\n`;
+    }
+
+    resumoItens += `${totalStr.padStart(32)}\n\n`;
+
+    resumoItensAdmin += `▪️ ${item.quantidade}x ${nomeExibicao}\n`;
+});
 
              const dataBr = new Date().toLocaleDateString('pt-BR');
              const horaBr = new Date().toLocaleTimeString('pt-BR').substring(0,5);
