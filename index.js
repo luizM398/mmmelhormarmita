@@ -242,7 +242,7 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
 }
 
 // ----------------------------------------------------------------------
-// 🔔 RECEBIMENTO E CONFIRMAÇÃO (WEBHOOK)
+// 🔔 RECEBIMENTO E CONFIRMAÇÃO (WEBHOOK) - VISUAL NOTINHA 🧾
 // ----------------------------------------------------------------------
 app.post('/webhook', async (req, res) => {
   const { action, data } = req.body;
@@ -267,19 +267,30 @@ app.post('/webhook', async (req, res) => {
 
               memoria.pedido.forEach(item => {
                 let nomeExibicao = item.prato;
-                // Ajustes de nomes (Integral/Light/Cenoura)
+
+                // 1. Aplica as variações no texto
                 if (item.arroz === 'Integral') nomeExibicao = nomeExibicao.replace(/arroz/gi, 'Arroz Integral');
                 if (item.strogonoff === 'Light') nomeExibicao = nomeExibicao.replace(/strogonoff/gi, 'Strogonoff Light');
-                nomeExibicao = nomeExibicao.replace(/cnoura/gi, 'cenoura');
+                
+                // 2. Formatação estilo "Notinha" (Quebra linha na vírgula e no " e ")
+                nomeExibicao = nomeExibicao.replace(/,/g, ',\n  '); 
+                nomeExibicao = nomeExibicao.replace(/ e /g, '\n  e ');
                 nomeExibicao = nomeExibicao.charAt(0).toUpperCase() + nomeExibicao.slice(1);
 
+                // Define preço
                 const precoItem = memoria.totalMarmitas >= 5 ? 0.01 : 19.99;
                 const totalItem = item.quantidade * precoItem;
                 subtotalVal += totalItem;
 
-                resumoItens += `${item.quantidade}x ${nomeExibicao.substring(0,25)}\n`;
-                resumoItens += `R$ ${totalItem.toFixed(2).padStart(30)}\n\n`;
-                resumoItensAdmin += `▪️ ${item.quantidade}x ${nomeExibicao}\n`;
+                // 3. Monta o visual final
+                resumoItens += `${item.quantidade}x ${nomeExibicao}\n`;
+                
+                // Preço alinhado à DIREITA
+                const precoFormatado = `R$ ${totalItem.toFixed(2).replace('.', ',')}`;
+                resumoItens += precoFormatado.padStart(30, ' ') + `\n\n`; 
+
+                // Resumo simples para o ADMIN
+                resumoItensAdmin += `▪️ ${item.quantidade}x ${item.prato}\n`;
               });
 
               const dataBr = new Date().toLocaleDateString('pt-BR');
@@ -288,16 +299,15 @@ app.post('/webhook', async (req, res) => {
               const cupomCliente = `\`\`\`
       🧾  MELHOR MARMITA  🍱
       CUPOM: #${data.id.slice(-4)}
---------------------------------------
+--------------------------------
 CLIENTE: ${memoria.nome.toUpperCase()}
 DATA: ${dataBr} - ${horaBr}
---------------------------------------
-${resumoItens}
---------------------------------------
-SUBTOTAL:           R$ ${subtotalVal.toFixed(2)}
-FRETE:              R$ ${memoria.valorFrete.toFixed(2)}
-TOTAL PAGO:         R$ ${valorPago.toFixed(2)}
---------------------------------------
+--------------------------------
+${resumoItens}--------------------------------
+SUBTOTAL:       R$ ${subtotalVal.toFixed(2).replace('.',',').padStart(8, ' ')}
+FRETE:          R$ ${memoria.valorFrete.toFixed(2).replace('.',',').padStart(8, ' ')}
+TOTAL PAGO:     R$ ${valorPago.toFixed(2).replace('.',',').padStart(8, ' ')}
+--------------------------------
 ✅ PAGAMENTO CONFIRMADO
 \`\`\``;
 
@@ -305,7 +315,7 @@ TOTAL PAGO:         R$ ${valorPago.toFixed(2)}
 
               await enviarMensagemWA(numeroCliente, cupomCliente);
               await enviarMensagemWA(numeroCliente, `Muito obrigado, ${memoria.nome}! Seu pedido já foi para a cozinha. 🍱🔥`);
-              await enviarMensagemWA(NUMERO_ADMIN, msgAdmin); // Usa o número configurado no topo
+              await enviarMensagemWA(NUMERO_ADMIN, msgAdmin); 
           }
         }
       } catch (error) { console.error("Erro Webhook:", error); }
@@ -318,7 +328,7 @@ TOTAL PAGO:         R$ ${valorPago.toFixed(2)}
 // ----------------------------------------------------------------------
 function menuPrincipal(nomeCliente) {
   const nomeDisplay = nomeCliente ? ` ${nomeCliente}` : '';
-  return `🔻 *Menu Principal para${nomeDisplay}*\n\n1️⃣  Ver Cardápio 🍱\n2️⃣  Fazer Pedido 🛒\n3️⃣  Elogios ou Reclamações 💬\n\n_Escolha uma opção digitando o número._`;
+  return `🔻 *Menu Principal para${nomeDisplay}*\n\n1️⃣  Ver Cardápio 🍱\n2️⃣  Fazer Pedido 🛒\n3️⃣  Falar com Atendente (Sugestões/Críticas) 💬\n\n_Escolha uma opção digitando o número._`;
 }
 
 function msgNaoEntendi(textoAnterior) {
