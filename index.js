@@ -318,7 +318,7 @@ TOTAL PAGO:         R$ ${valorPago.toFixed(2)}
 // ----------------------------------------------------------------------
 function menuPrincipal(nomeCliente) {
   const nomeDisplay = nomeCliente ? ` ${nomeCliente}` : '';
-  return `🔻 *Menu Principal para${nomeDisplay}*\n\n1️⃣  Ver Cardápio 🍱\n2️⃣  Fazer Pedido 🛒\n3️⃣  Falar com Atendente (Sugestões/Críticas) 💬\n\n_Escolha uma opção digitando o número._`;
+  return `🔻 *Menu Principal para${nomeDisplay}*\n\n1️⃣  Ver Cardápio 🍱\n2️⃣  Fazer Pedido 🛒\n3️⃣  Elogios ou Reclamações 💬\n\n_Escolha uma opção digitando o número._`;
 }
 
 function msgNaoEntendi(textoAnterior) {
