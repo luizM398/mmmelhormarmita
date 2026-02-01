@@ -71,50 +71,48 @@ const client = new MercadoPagoConfig({
 const MAPBOX_ACCESS_TOKEN = process.env.MAPBOX_ACCESS_TOKEN; 
 const COORD_COZINHA = "-51.130867,-30.111452"; // Rua Guaíba, 10
 
-// 🚚 MOTOR DE FRETE (VERSÃO FINAL BLINDADA 🛡️)
+// 🚚 MOTOR DE FRETE (HÍBRIDO: VIACEP + MAPBOX)
 async function calcularFreteGoogle(cepDestino) {
-  console.log(`🔎 [DEBUG] Iniciando cálculo para o CEP: ${cepDestino}`);
+  console.log(`🔎 [DEBUG] Iniciando cálculo HÍBRIDO para: ${cepDestino}`);
   
   if (!MAPBOX_ACCESS_TOKEN) {
-      console.error("❌ [ERRO CRÍTICO] Token Mapbox ausente!");
-      return { erro: true, msg: "Erro interno (Token)." };
+      return { erro: true, msg: "Erro interno (Token Mapbox ausente)." };
   }
 
   try {
-    // 1. LIMPEZA TOTAL: Remove traços, pontos e espaços. Só sobram números.
+    // 1. LIMPEZA DO CEP
     const cepLimpo = String(cepDestino).replace(/\D/g, '');
-    
-    // Se depois de limpar não tiver 8 números, avisa o erro.
     if (cepLimpo.length !== 8) return { erro: true, msg: "⚠️ CEP inválido. Digite os 8 números." };
 
-    // 2. FORMATAÇÃO MÁGICA: Transforma 91560640 em 91560-640
-    // O MAPBOX EXIGE O TRAÇO NO BRASIL, E ESTA LINHA GARANTE QUE ELE VAI ESTAR LÁ 👇
-    const cepFormatado = cepLimpo.replace(/^(\d{5})(\d{3})/, "$1-$2");
-    console.log(`📡 [DEBUG] Buscando CEP formatado: ${cepFormatado}`);
+    // 2. CONSULTA O VIACEP (Para descobrir o nome da rua)
+    console.log("🇧🇷 [DEBUG] Consultando ViaCEP...");
+    const urlViaCep = `https://viacep.com.br/ws/${cepLimpo}/json/`;
+    const viaCepRes = await axios.get(urlViaCep);
 
-  // Tenta buscar com o formato certinho + CIDADE (O Truque Mestre)
-    // 👇 ADICIONEI ", Porto Alegre, RS" PARA FORÇAR ELE A ACHAR
-    let urlGeo = `https://api.mapbox.com/geocoding/v5/mapbox.places/${cepFormatado}, Porto Alegre, RS.json?country=br&access_token=${MAPBOX_ACCESS_TOKEN}`;
-    let geoRes = await axios.get(urlGeo);
-    
-    // Se falhar, tenta sem o traço + CIDADE
-    if (!geoRes.data.features || geoRes.data.features.length === 0) {
-        console.log("⚠️ [DEBUG] Tentando sem hífen com cidade...");
-        // 👇 ADICIONEI AQUI TAMBÉM
-        urlGeo = `https://api.mapbox.com/geocoding/v5/mapbox.places/${cepLimpo}, Porto Alegre, RS.json?country=br&access_token=${MAPBOX_ACCESS_TOKEN}`;
-        geoRes = await axios.get(urlGeo);
+    if (viaCepRes.data.erro) {
+        console.log("❌ [DEBUG] ViaCEP não encontrou este CEP.");
+        return { erro: true, msg: "❌ CEP não encontrado na base dos Correios." };
     }
 
+    // Monta o endereço exato com o retorno do ViaCEP
+    // Ex: "Rua da Represa, Porto Alegre, Rio Grande do Sul, Brasil"
+    const enderecoTexto = `${viaCepRes.data.logradouro}, ${viaCepRes.data.localidade}, ${viaCepRes.data.uf}, Brasil`;
+    console.log(`✅ [DEBUG] Endereço descoberto: ${enderecoTexto}`);
+
+    // 3. MAPBOX GEOCODING (Agora procuramos pelo NOME DA RUA, que é infalível)
+    // Usamos encodeURIComponent para garantir que espaços e acentos não quebrem o link
+    const urlGeo = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(enderecoTexto)}.json?country=br&limit=1&access_token=${MAPBOX_ACCESS_TOKEN}`;
+    const geoRes = await axios.get(urlGeo);
+    
     if (!geoRes.data.features || geoRes.data.features.length === 0) {
-        return { erro: true, msg: "❌ Endereço não localizado. Verifique o CEP." };
+        return { erro: true, msg: "❌ O mapa não conseguiu localizar a rua informada." };
     }
 
     const destino = geoRes.data.features[0];
-    const coordsDestino = destino.center.join(',');
-    const enderecoFormatado = destino.place_name;
-    console.log(`✅ [DEBUG] Localizado: ${enderecoFormatado}`);
-
-    // 3. CÁLCULO DA ROTA
+    const coordsDestino = destino.center.join(','); // Longitude,Latitude
+    
+    // 4. CÁLCULO DA ROTA (Directions)
+    console.log("🚗 [DEBUG] Calculando rota exata até a rua...");
     const urlDist = `https://api.mapbox.com/directions/v5/mapbox/driving/${COORD_COZINHA};${coordsDestino}?access_token=${MAPBOX_ACCESS_TOKEN}`;
     const distRes = await axios.get(urlDist);
 
@@ -123,7 +121,7 @@ async function calcularFreteGoogle(cepDestino) {
     }
 
     const distanciaKm = distRes.data.routes[0].distance / 1000;
-    console.log(`📏 [DEBUG] Distância: ${distanciaKm.toFixed(2)} km`);
+    console.log(`📏 [DEBUG] Distância Final: ${distanciaKm.toFixed(2)} km`);
 
     // TABELA DE PREÇOS (MODO TESTE: R$ 1,00)
     let valor = 15.00;
@@ -133,9 +131,9 @@ async function calcularFreteGoogle(cepDestino) {
     else if (distanciaKm <= 5.0) { valor = 8.00; texto = "R$ 8,00"; }
     else if (distanciaKm <= 10.0) { valor = 12.00; texto = "R$ 12,00"; }
     
-    if (distanciaKm > 20.0) return { erro: true, msg: "🚫 Muito longe (Limite 20km)." };
+    if (distanciaKm > 20.0) return { erro: true, msg: "🚫 Fora da área de entrega (limite 20km)." };
 
-    return { valor, texto, endereco: enderecoFormatado };
+    return { valor, texto, endereco: enderecoTexto };
 
   } catch (error) {
     console.error("🔥 [ERRO]:", error.message);
