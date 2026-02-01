@@ -608,7 +608,6 @@ if (cliente.estado === 'VARIACAO_STROGONOFF') {
 }
     
 // 📈 QUANTIDADE E CARRINHO
-// 🔢 DEFINIÇÃO DE QUANTIDADE
 if (cliente.estado === 'QUANTIDADE') {
   const qtd = parseInt(mensagem);
   if (isNaN(qtd) || qtd < 1) { 
@@ -702,7 +701,6 @@ if (cliente.estado === 'AGUARDANDO_CEP') {
 }
 
 // 🏠 CONFIRMAÇÃO DE ENDEREÇO E PAGAMENTO
-// 🏠 ENDEREÇO E COMPLEMENTO
 if (cliente.estado === 'CONFIRMANDO_ENDERECO_COMPLEMENTO') {
     if (mensagem === '0') {
         cliente.estado = 'AGUARDANDO_CEP';
