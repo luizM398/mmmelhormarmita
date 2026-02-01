@@ -72,46 +72,76 @@ const MAPBOX_ACCESS_TOKEN = process.env.MAPBOX_ACCESS_TOKEN;
 const COORD_COZINHA = "-51.130867,-30.111452"; // Rua Guaíba, 10
 
 // 🚚 MOTOR DE FRETE (Mapbox)
+// 🚚 MOTOR DE FRETE (MODO DIAGNÓSTICO / CORRIGIDO)
 async function calcularFreteGoogle(cepDestino) {
+  console.log(`🔎 [DEBUG] Iniciando cálculo para o CEP: ${cepDestino}`);
+  
+  // 1. Verifica se o token existe antes de tentar
+  if (!MAPBOX_ACCESS_TOKEN) {
+      console.error("❌ [ERRO CRÍTICO] O Token do Mapbox NÃO foi encontrado nas variáveis!");
+      return { erro: true, msg: "Erro interno no servidor (Token)." };
+  }
+
   try {
     const cepLimpo = String(cepDestino).replace(/\D/g, '');
-    if (cepLimpo.length !== 8) return { erro: true, msg: "⚠️ CEP inválido. Digite os 8 números." };
+    if (cepLimpo.length !== 8) {
+        console.log("⚠️ [DEBUG] CEP com tamanho errado.");
+        return { erro: true, msg: "⚠️ CEP inválido. Digite os 8 números." };
+    }
 
+    // 2. Geocoding (Acha onde é o CEP)
     const urlGeo = `https://api.mapbox.com/geocoding/v5/mapbox.places/${cepLimpo}.json?country=br&access_token=${MAPBOX_ACCESS_TOKEN}`;
+    console.log("📡 [DEBUG] Perguntando ao Mapbox onde fica esse CEP...");
+    
     const geoRes = await axios.get(urlGeo);
     
     if (!geoRes.data.features || geoRes.data.features.length === 0) {
+        console.log("❌ [DEBUG] O Mapbox disse que esse CEP não existe.");
         return { erro: true, msg: "❌ Endereço não localizado pelo CEP." };
     }
 
     const destino = geoRes.data.features[0];
-    const coordsDestino = destino.center.join(',');
+    const coordsDestino = destino.center.join(','); // Longitude,Latitude
     const enderecoFormatado = destino.place_name;
+    console.log(`✅ [DEBUG] Endereço encontrado: ${enderecoFormatado}`);
 
+    // 3. Directions (Calcula a rota)
     const urlDist = `https://api.mapbox.com/directions/v5/mapbox/driving/${COORD_COZINHA};${coordsDestino}?access_token=${MAPBOX_ACCESS_TOKEN}`;
+    console.log("🚗 [DEBUG] Calculando rota de carro...");
+    
     const distRes = await axios.get(urlDist);
 
     if (!distRes.data.routes || distRes.data.routes.length === 0) {
+        console.log("🚫 [DEBUG] O Mapbox não conseguiu traçar uma rota de carro até aí.");
         return { erro: true, msg: "🚫 Rota não encontrada." };
     }
 
     const distanciaKm = distRes.data.routes[0].distance / 1000;
-    
+    console.log(`📏 [DEBUG] Distância calculada: ${distanciaKm.toFixed(2)} km`);
+
+    // TABELA DE PREÇOS (MODO TESTE: R$ 1,00)
     let valor = 15.00;
     let texto = "R$ 15,00";
-    if (distanciaKm <= 2.0) { valor = 1.00; texto = "R$ 5,00"; }
+
+    if (distanciaKm <= 2.0) { valor = 1.00; texto = "R$ 1,00 (Teste)"; }
     else if (distanciaKm <= 5.0) { valor = 8.00; texto = "R$ 8,00"; }
     else if (distanciaKm <= 10.0) { valor = 12.00; texto = "R$ 12,00"; }
     
-    if (distanciaKm > 20.0) return { erro: true, msg: "🚫 Fora da área de entrega (limite 20km)." };
+    if (distanciaKm > 20.0) {
+        console.log("🚫 [DEBUG] Endereço muito longe (>20km).");
+        return { erro: true, msg: "🚫 Fora da área de entrega (limite 20km)." };
+    }
 
     return { valor, texto, endereco: enderecoFormatado };
 
   } catch (error) {
-    return { valor: 8.00, texto: "R$ 8,00 (Fixo)", endereco: "Endereço via CEP" };
+    // Aqui é onde ele vai te contar o erro real
+    console.error("🔥 [ERRO NO CÓDIGO]:", error.response ? error.response.data : error.message);
+    
+    // Retorna erro para o usuário não ficar travado
+    return { erro: true, msg: "⚠️ Erro técnico ao calcular frete. Tente novamente." };
   }
 }
-
 // 💰 PROCESSAMENTO DE PAGAMENTOS
 async function gerarPix(valor, clienteNome, clienteTelefone) {
   try {
