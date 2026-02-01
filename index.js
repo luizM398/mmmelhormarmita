@@ -101,30 +101,52 @@ async function calcularFreteGoogle(cepDestino) {
     if (cepLimpo.length !== 8) return { erro: true, msg: "⚠️ CEP inválido. Digite os 8 números." };
 
     const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(ORIGEM_COZINHA)}&destinations=cep+${cepLimpo}&mode=driving&language=pt-BR&key=${GOOGLE_API_KEY}`;
-    CONTROLE_MAPS.consultas++;
-
+    
+    // 🔍 LOG DE DEBUG: Para você ver a URL no terminal se precisar testar no navegador
+    console.log(`🔗 Consultando Google: ${url}`);
+    
     const response = await axios.get(url);
     const data = response.data;
 
-    if (data.status !== 'OK' || !data.rows[0].elements[0].distance) return { erro: true, msg: "❌ CEP não localizado." };
-    
+    // Verifica se a chave ou a conta do Google tem algum problema
+    if (data.status !== 'OK') {
+        console.error("❌ Erro na API do Google:", data.error_message || data.status);
+        return { erro: true, msg: `❌ Erro na localização (${data.status}). Verifique o CEP.` };
+    }
+
     const elemento = data.rows[0].elements[0];
-    if (elemento.status !== 'OK') return { erro: true, msg: "🚫 Rota não encontrada." };
+    
+    // Verifica se o CEP existe mas não tem rota de carro até ele
+    if (elemento.status === 'ZERO_RESULTS' || elemento.status === 'NOT_FOUND') {
+        console.warn(`⚠️ CEP ${cepLimpo} localizado, mas sem rota encontrada.`);
+        return { erro: true, msg: "❌ Não encontramos rota para este CEP. Verifique se ele é da nossa região." };
+    }
+
+    if (elemento.status !== 'OK') {
+        console.error("❌ Status do elemento Google:", elemento.status);
+        return { erro: true, msg: "🚫 Erro ao calcular distância. Tente novamente." };
+    }
+
+    // Só conta a consulta se deu tudo certo
+    CONTROLE_MAPS.consultas++;
 
     const distanciaKm = elemento.distance.value / 1000;
     const enderecoGoogle = data.destination_addresses[0]; 
 
-    if (distanciaKm <= 2.0) return { valor: 1.00, texto: "R$ 5,00", endereco: enderecoGoogle };
+    console.log(`📏 Sucesso! Distância: ${distanciaKm.toFixed(2)}km para ${enderecoGoogle}`);
+
+    // Ajuste de valores (Corrigi o de 2km para R$ 5,00)
+    if (distanciaKm <= 2.0) return { valor: 5.00, texto: "R$ 5,00", endereco: enderecoGoogle };
     if (distanciaKm <= 5.0) return { valor: 8.00, texto: "R$ 8,00", endereco: enderecoGoogle };
     if (distanciaKm <= 10.0) return { valor: 15.00, texto: "R$ 15,00", endereco: enderecoGoogle };
     if (distanciaKm <= 20.0) return { valor: 20.00, texto: "R$ 20,00", endereco: enderecoGoogle };
 
-    return { erro: true, msg: "🚫 Endereço fora da área de entrega." };
+    return { erro: true, msg: "🚫 Endereço fora da área de entrega (limite 20km)." };
   } catch (error) {
-    return { erro: true, msg: "⚠️ Erro no cálculo de frete." };
+    console.error("⚠️ Erro Crítico no Frete:", error.message);
+    return { erro: true, msg: "⚠️ Erro técnico no cálculo de frete." };
   }
 }
-
 // 💰 PROCESSAMENTO DE PAGAMENTOS
 async function gerarPix(valor, clienteNome, clienteTelefone) {
   try {
