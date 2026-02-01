@@ -105,6 +105,7 @@ async function calcularFreteGoogle(cepDestino) {
 }
 
 // 💰 PROCESSAMENTO DE PAGAMENTOS
+// 💰 GERADOR DE PIX (MERCADO PAGO)
 async function gerarPix(valor, clienteNome, clienteTelefone) {
   try {
     const payment = new Payment(client);
@@ -112,7 +113,7 @@ async function gerarPix(valor, clienteNome, clienteTelefone) {
       transaction_amount: parseFloat(valor.toFixed(2)),
       description: `Marmita - ${clienteNome}`, 
       payment_method_id: 'pix',
-      notification_url: `${URL_DO_SEU_SITE}/webhook`, 
+      notification_url: `${process.env.URL_DO_SEU_SITE}/webhook`, 
       external_reference: String(clienteTelefone).replace(/\D/g, ''), 
       payer: { email: `vendas.${Date.now()}@marmitaria.com` }
     };
@@ -123,18 +124,24 @@ async function gerarPix(valor, clienteNome, clienteTelefone) {
       idPagamento: response.id 
     };
   } catch (error) { 
+    console.error("Erro ao gerar Pix:", error.message);
     return null; 
   }
 }
 
+// 💳 GERADOR DE LINK DE CARTÃO (MERCADO PAGO)
 async function gerarLinkPagamento(itens, frete, clienteTelefone) {
   try {
     const preference = new Preference(client);
     
+    // Calcula o total de marmitas para aplicar a promoção
+    const totalMarmitas = itens.reduce((acc, i) => acc + i.quantidade, 0);
+    const precoUnitario = totalMarmitas >= 5 ? 17.49 : 19.99;
+
     const items = itens.map(item => ({
       title: item.prato,
       quantity: Number(item.quantidade),
-      unit_price: Number(item.quantidade >= 5 ? 0.01 : 19.99),
+      unit_price: Number(precoUnitario),
       currency_id: 'BRL'
     }));
 
@@ -150,13 +157,13 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
     const response = await preference.create({
       body: {
         items: items,
-        external_reference: String(clienteTelefone),
+        external_reference: String(clienteTelefone).replace(/\D/g, ''),
         back_urls: {
-         success: "https://wa.me/5551985013496?text=Oi!%20Já%20concluí%20meu%20pagamento%20pelo%20cartão!%20🍱",
-  failure: "https://wa.me/5551985013496?text=Ops...%20Tive%20um%20problema%20no%20pagamento.%20Pode%20me%20ajudar?",
-  pending: "https://wa.me/5551985013496"
-},
-auto_return: "approved"
+          success: "https://wa.me/5551985013496?text=Oi!%20Já%20concluí%20meu%20pagamento!%20🍱",
+          failure: "https://wa.me/5551985013496?text=Tive%20um%20problema%20no%20pagamento.",
+          pending: "https://wa.me/5551985013496"
+        },
+        auto_return: "approved"
       }
     });
 
@@ -167,11 +174,7 @@ auto_return: "approved"
   }
 }
 
-// 🖨️ AUXILIARES DE FORMATAÇÃO
-function pad(str, length) { return (str + '                          ').substring(0, length); }
-function padL(str, length) { return ('                          ' + str).slice(-length); }
-
-// 🔔 RECEBIMENTO DE PEDIDOS (WEBHOOK)
+// 🔔 RECEBIMENTO E CONFIRMAÇÃO (WEBHOOK)
 app.post('/webhook', async (req, res) => {
   const { action, data } = req.body;
 
@@ -186,7 +189,6 @@ app.post('/webhook', async (req, res) => {
           const memoria = clientes[numeroCliente];
           
           if (memoria) {
-              // A CHAVE DO PROBLEMA: Só confirma o pagamento aqui!
               memoria.pagamentoConfirmado = true;
               memoria.estado = 'FINALIZADO';
               
@@ -196,89 +198,48 @@ app.post('/webhook', async (req, res) => {
 
               memoria.pedido.forEach(item => {
                 let nomeExibicao = item.prato;
-
-                if (item.arroz === 'Integral') {
-                    nomeExibicao = nomeExibicao.replace(/arroz/gi, 'Arroz Integral');
-                }
-                if (item.strogonoff === 'Light') {
-                    nomeExibicao = nomeExibicao.replace(/strogonoff/gi, 'Strogonoff Light');
-                }
-
+                // Ajustes de nomes (Integral/Light/Cenoura)
+                if (item.arroz === 'Integral') nomeExibicao = nomeExibicao.replace(/arroz/gi, 'Arroz Integral');
+                if (item.strogonoff === 'Light') nomeExibicao = nomeExibicao.replace(/strogonoff/gi, 'Strogonoff Light');
                 nomeExibicao = nomeExibicao.replace(/cnoura/gi, 'cenoura');
                 nomeExibicao = nomeExibicao.charAt(0).toUpperCase() + nomeExibicao.slice(1);
 
-                const precoItem = item.quantidade >= 5 ? 0.01 : 19.99;
+                const precoItem = memoria.totalMarmitas >= 5 ? 17.49 : 19.99;
                 const totalItem = item.quantidade * precoItem;
                 subtotalVal += totalItem;
-                const totalStr = 'R$ ' + totalItem.toFixed(2).replace('.', ',');
 
-                let partes = nomeExibicao.split(',');
-                let linha1 = (partes[0] || '').trim();
-                let linha2 = (partes[1] || '').trim();
-                let linha3 = (partes[2] || '').trim();
-
-                resumoItens += `${item.quantidade}x ${linha1}\n`;
-                
-                if (linha2) {
-                    resumoItens += `   ${linha2}\n`;
-                }
-                
-                if (linha3) {
-                    let l3 = linha3.toLowerCase().startsWith('e ') ? linha3 : `e ${linha3}`;
-                    resumoItens += `   ${l3}\n`;
-                }
-
-                resumoItens += `${totalStr.padStart(32)}\n\n`;
+                resumoItens += `${item.quantidade}x ${nomeExibicao.substring(0,25)}\n`;
+                resumoItens += `R$ ${totalItem.toFixed(2).padStart(30)}\n\n`;
                 resumoItensAdmin += `▪️ ${item.quantidade}x ${nomeExibicao}\n`;
               });
 
               const dataBr = new Date().toLocaleDateString('pt-BR');
               const horaBr = new Date().toLocaleTimeString('pt-BR').substring(0,5);
 
-              const cupomCliente = 
-`\`\`\`
+              const cupomCliente = `\`\`\`
       🧾  MELHOR MARMITA  🍱
-      CUPOM DE PEDIDO: #${data.id.slice(-4)}
+      CUPOM: #${data.id.slice(-4)}
 --------------------------------------
 CLIENTE: ${memoria.nome.toUpperCase()}
 DATA: ${dataBr} - ${horaBr}
 --------------------------------------
-ITEM                     QTD    VALOR
---------------------------------------
 ${resumoItens}
 --------------------------------------
-SUBTOTAL:                   R$ ${subtotalVal.toFixed(2)}
-FRETE:                      R$ ${memoria.valorFrete.toFixed(2)}
+SUBTOTAL:           R$ ${subtotalVal.toFixed(2)}
+FRETE:              R$ ${memoria.valorFrete.toFixed(2)}
+TOTAL PAGO:         R$ ${valorPago.toFixed(2)}
 --------------------------------------
-TOTAL PAGO:                 R$ ${valorPago.toFixed(2)}
---------------------------------------
-✅  PAGAMENTO CONFIRMADO
-    OBRIGADO PELA PREFERÊNCIA!
+✅ PAGAMENTO CONFIRMADO
 \`\`\``;
 
-              const msgAdmin = 
-`🔔 *NOVO PEDIDO PAGO!* 👨‍🍳🔥
---------------------------------
-👤 *CLIENTE:* ${memoria.nome}
-📞 *CONTATO:* wa.me/${numeroCliente}
-📍 *ENTREGA:* ${memoria.endereco}
---------------------------------
-📦 *ITENS:*
-${resumoItensAdmin}
-🚚 Frete: R$ ${memoria.valorFrete.toFixed(2)}
-💰 *TOTAL DA VENDA: R$ ${valorPago.toFixed(2)}*
---------------------------------
-✅ *Status:* PAGO`;
+              const msgAdmin = `🔔 *NOVO PEDIDO PAGO!* 👨‍🍳🔥\n👤 *CLIENTE:* ${memoria.nome}\n📍 *ENTREGA:* ${memoria.endereco}\n📦 *ITENS:*\n${resumoItensAdmin}\n🚚 Frete: R$ ${memoria.valorFrete.toFixed(2)}\n💰 *TOTAL: R$ ${valorPago.toFixed(2)}*`;
 
-              await enviarMensagemWA(numeroCliente, `Aqui está seu comprovante detalhado:`);
               await enviarMensagemWA(numeroCliente, cupomCliente);
-              await enviarMensagemWA(numeroCliente, `Muito obrigado, ${memoria.nome}! Já enviamos para a cozinha. 🍱🔥`);
-              await enviarMensagemWA(NUMERO_ADMIN, msgAdmin);
+              await enviarMensagemWA(numeroCliente, `Muito obrigado, ${memoria.nome}! Seu pedido já foi para a cozinha. 🍱🔥`);
+              await enviarMensagemWA(process.env.NUMERO_ADMIN, msgAdmin);
           }
         }
-      } catch (error) { 
-        console.error("Erro Webhook:", error); 
-      }
+      } catch (error) { console.error("Erro Webhook:", error); }
   }
   res.sendStatus(200);
 });
