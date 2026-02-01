@@ -105,7 +105,6 @@ async function calcularFreteGoogle(cepDestino) {
 }
 
 // 💰 PROCESSAMENTO DE PAGAMENTOS
-// 💰 GERADOR DE PIX (MERCADO PAGO)
 async function gerarPix(valor, clienteNome, clienteTelefone) {
   try {
     const payment = new Payment(client);
@@ -244,7 +243,6 @@ TOTAL PAGO:         R$ ${valorPago.toFixed(2)}
   res.sendStatus(200);
 });
 
-// 🧠 LÓGICA DE INTERAÇÃO
 // 🏠 MENU PRINCIPAL
 function menuPrincipal(nomeCliente) {
   const nomeDisplay = nomeCliente ? ` ${nomeCliente}` : '';
@@ -359,7 +357,6 @@ app.post('/mensagem', async (req, res) => {
 
     console.log(`📩 Cliente ${numero} (${cliente.estado}): "${mensagem}"`);
 
-// 👋 SAUDAÇÃO INICIAL
 // 👋 SAUDAÇÃO INICIAL
 if (!cliente.recebeuSaudacao) {
   cliente.recebeuSaudacao = true;
@@ -506,7 +503,6 @@ if (cliente.estado === 'ESCOLHENDO_PRATO') {
   return res.status(200).json({ ok: true });
 }
 
-// 🌾 VARIAÇÕES (ARROZ)
 // 🍚 VARIAÇÕES (ARROZ)
 if (cliente.estado === 'VARIACAO_ARROZ') {
   const itemAtual = cliente.pedido[cliente.pedido.length - 1];
@@ -617,7 +613,7 @@ if (cliente.estado === 'ADICIONAR_OUTRO') {
   return res.status(200).json({ ok: true });
 }
     
-// 📍 CÁLCULO DE FRETE (GOOGLE MAPS)
+// 📍 RECEPÇÃO DO CEP E CÁLCULO DE FRETE
 if (cliente.estado === 'AGUARDANDO_CEP') {
     const cepLimpo = mensagem.replace(/\D/g, '');
     
@@ -626,7 +622,8 @@ if (cliente.estado === 'AGUARDANDO_CEP') {
         return res.status(200).json({ ok: true });
     }
 
-    await enviarMensagemWA(numero, "🔍 Calculando rota no Google Maps... Só um instante.");
+    await enviarMensagemWA(numero, "🔍 Calculando rota e frete... Só um instante.");
+    // Aqui ele chama a função que já configuramos com Mapbox na Parte 1
     const frete = await calcularFreteGoogle(cepLimpo);
     
     if (frete.erro) {
@@ -637,7 +634,8 @@ if (cliente.estado === 'AGUARDANDO_CEP') {
     cliente.endereco = `CEP: ${cepLimpo} (${frete.endereco})`; 
     
     const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
-    const valorUnitario = totalMarmitas >= 5 ? 0.01 : 19.99;
+    // Preços Oficiais: 17.49 (Promo) ou 19.99 (Normal)
+    const valorUnitario = totalMarmitas >= 5 ? 17.49 : 19.99;
     const subtotalMarmitas = totalMarmitas * valorUnitario;
 
     const totalComFrete = subtotalMarmitas + frete.valor;
@@ -664,17 +662,16 @@ if (cliente.estado === 'CONFIRMANDO_ENDERECO_COMPLEMENTO') {
     cliente.endereco += ` - Compl: ${texto}`;
     cliente.estado = 'ESCOLHENDO_PAGAMENTO';
     
-    let resumoPgto = `📝 *Fechamento da Conta:*\n👤 Cliente: ${cliente.nome}\n💰 *TOTAL FINAL: R$ ${cliente.totalFinal.toFixed(2).replace('.', ',')}*\n\n🚚 *Entrega prevista: de 3 a 5 dias*\n\n💳 *Como deseja pagar?*\n1️⃣ PIX (Aprovação Imediata)\n2️⃣ Cartão de Crédito/Débito (Link)\n\n0️⃣ Voltar para o CEP`;
+    let resumoPgto = `📝 *Fechamento da Conta:*\n👤 Cliente: ${cliente.nome}\n💰 *TOTAL FINAL: R$ ${cliente.totalFinal.toFixed(2).replace('.', ',')}*\n\n💳 *Como deseja pagar?*\n1️⃣ PIX (Aprovação Imediata)\n2️⃣ Cartão de Crédito/Débito (Link)\n\n0️⃣ Voltar para o CEP`;
     
     cliente.ultimaMensagem = resumoPgto;
     await enviarMensagemWA(numero, resumoPgto);
     return res.status(200).json({ ok: true });
 }
 
-// 💳 GESTÃO DE PAGAMENTO (PERMITE MUDAR)
+// 💳 GESTÃO DE PAGAMENTO
 if (cliente.estado === 'ESCOLHENDO_PAGAMENTO' || cliente.estado === 'AGUARDANDO_PAGAMENTO') {
   
-  // Opção para MUDAR a forma de pagamento ou voltar
   if (mensagem === '0' || mensagem === 'mudar') {
       cliente.estado = 'ESCOLHENDO_PAGAMENTO';
       let msgMudar = `🔄 *Mudar forma de pagamento:*\n\n1️⃣ PIX (Aprovação Imediata)\n2️⃣ Cartão de Crédito/Débito (Link)`;
@@ -690,7 +687,7 @@ if (cliente.estado === 'ESCOLHENDO_PAGAMENTO' || cliente.estado === 'AGUARDANDO_
          await enviarMensagemWA(numero, `Aqui está seu código PIX:`);
          await enviarMensagemWA(numero, dadosPix.copiaCola); 
          await enviarMensagemWA(numero, `✅ *Copie o código acima e cole no aplicativo do seu banco.*\n\n_(Se quiser mudar para cartão, digite *0*)_`);
-         cliente.estado = 'AGUARDANDO_PAGAMENTO'; // Fica aguardando o webhook
+         cliente.estado = 'AGUARDANDO_PAGAMENTO';
      } else {
          await enviarMensagemWA(numero, "⚠️ Ocorreu uma instabilidade ao gerar o PIX. Tente novamente em instantes.");
      }
@@ -701,7 +698,7 @@ if (cliente.estado === 'ESCOLHENDO_PAGAMENTO' || cliente.estado === 'AGUARDANDO_
      
      if (link) {
          await enviarMensagemWA(numero, `✅ *Link gerado! Clique abaixo para pagar:*\n\n${link}\n\n_(Se quiser mudar para PIX, digite *0*)_`);
-         cliente.estado = 'AGUARDANDO_PAGAMENTO'; // Fica aguardando o webhook
+         cliente.estado = 'AGUARDANDO_PAGAMENTO';
      } else {
          await enviarMensagemWA(numero, "⚠️ Não conseguimos gerar o link de cartão. Tente a opção PIX.");
      }
@@ -712,35 +709,34 @@ if (cliente.estado === 'ESCOLHENDO_PAGAMENTO' || cliente.estado === 'AGUARDANDO_
   return res.status(200).json({ ok: true });
 }
 
-// 🏁 STATUS: PEDIDO PAGO E FINALIZADO
+// 🏁 STATUS FINAL E FEEDBACK
 if (cliente.estado === 'FINALIZADO') {
    if (mensagem === 'menu' || mensagem === '0') {
        estadoClientes.resetarCliente(numero);
        await enviarMensagemWA(numero, menuPrincipal());
        return res.status(200).json({ ok: true });
    }
-   await enviarMensagemWA(numero, `👋 Olá, ${cliente.nome}! Seu pedido já está na nossa lista de produção.\n\nPara iniciar um *novo pedido*, basta digitar *MENU*.`);
+   await enviarMensagemWA(numero, `👋 Olá, ${cliente.nome}! Seu pedido já está na cozinha.\n\nPara um *novo pedido*, digite *MENU*.`);
    return res.status(200).json({ ok: true });
 }
 
-// 💬 FEEDBACK DO CLIENTE
 if (cliente.estado === 'ELOGIOS') {
-  console.log(`[FEEDBACK] Cliente ${numero}: ${texto}`);
   cliente.estado = 'MENU';
-  await enviarMensagemWA(numero, `✅ Muito obrigado! Seu feedback foi registrado. Se necessário, um atende dará retorno em breve. \n\n` + menuPrincipal(cliente.nome));
+  await enviarMensagemWA(numero, `✅ Obrigado! Seu feedback foi registrado.\n\n` + menuPrincipal(cliente.nome));
   return res.status(200).json({ ok: true });
 }
 
-// 🔄 TRATAMENTO GLOBAL E FINALIZAÇÃO
-    await enviarMensagemWA(numero, `👋 Olá! Bem-vindo de volta, ${cliente.nome || 'Visitante'}!\n\n` + menuPrincipal(cliente.nome));
+// 🔄 SAUDAÇÃO GLOBAL (CASO O BOT SE PERCA)
+    await enviarMensagemWA(numero, `👋 Olá! Bem-vindo de volta!\n\n` + menuPrincipal(cliente.nome));
     return res.status(200).json({ ok: true });
 
   } catch (error) {
     console.error('❌ [ERRO CRÍTICO]:', error.message);
-    return res.status(500).json({ error: 'Erro interno no servidor' });
+    return res.status(200).json({ ok: true }); // Mantém o status 200 para não travar o webhook
   }
 });
 
+// 🚀 LIGANDO O MOTOR!
 app.listen(PORT, () => { 
   console.log(`🚀 Servidor "Melhor Marmita" rodando na porta ${PORT}`); 
 });
