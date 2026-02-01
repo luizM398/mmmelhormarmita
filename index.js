@@ -67,11 +67,11 @@ const estadoClientes = {
   }
 };
 
-// 🧹 MANUTENÇÃO: Limpa sessões inativas após 10 minutos
+// 🧹 MANUTENÇÃO: Limpa sessões inativas após 60 minutos
 setInterval(() => {
   const agora = Date.now();
   for (const numero in clientes) {
-    if (agora - clientes[numero].ultimoContato > 10 * 60 * 1000) {
+    if (agora - clientes[numero].ultimoContato > 60 * 60 * 1000) {
       delete clientes[numero];
     }
   }
