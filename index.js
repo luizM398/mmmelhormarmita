@@ -746,7 +746,7 @@ if (cliente.estado === 'FINALIZADO') {
 if (cliente.estado === 'ELOGIOS') {
   console.log(`[FEEDBACK] Cliente ${numero}: ${texto}`);
   cliente.estado = 'MENU';
-  await enviarMensagemWA(numero, `✅ Muito obrigado! Seu feedback foi registrado e é muito importante para nós.\n\n` + menuPrincipal(cliente.nome));
+  await enviarMensagemWA(numero, `✅ Muito obrigado! Seu feedback foi registrado e é muito importante para nós. Assim que possivel, um atendente lhe dará uma resposta se necessário.\n\n` + menuPrincipal(cliente.nome));
   return res.status(200).json({ ok: true });
 }
 
