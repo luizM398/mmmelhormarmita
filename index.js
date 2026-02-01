@@ -242,7 +242,7 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
 }
 
 // ----------------------------------------------------------------------
-// 🔔 RECEBIMENTO E CONFIRMAÇÃO (WEBHOOK) - VISUAL NOTINHA 🧾
+// 🔔 RECEBIMENTO E CONFIRMAÇÃO (WEBHOOK) - VISUAL NOTINHA 32 COLUNAS 📐
 // ----------------------------------------------------------------------
 app.post('/webhook', async (req, res) => {
   const { action, data } = req.body;
@@ -261,6 +261,10 @@ app.post('/webhook', async (req, res) => {
               memoria.pagamentoConfirmado = true;
               memoria.estado = 'FINALIZADO';
               
+              // 📐 CONFIGURAÇÃO DO VISUAL (32 Colunas = Padrão Recibo)
+              const TAMANHO_CUPOM = 32; 
+              const SEPARADOR = '-'.repeat(TAMANHO_CUPOM); 
+
               let resumoItens = "";     
               let resumoItensAdmin = ""; 
               let subtotalVal = 0;
@@ -272,9 +276,15 @@ app.post('/webhook', async (req, res) => {
                 if (item.arroz === 'Integral') nomeExibicao = nomeExibicao.replace(/arroz/gi, 'Arroz Integral');
                 if (item.strogonoff === 'Light') nomeExibicao = nomeExibicao.replace(/strogonoff/gi, 'Strogonoff Light');
                 
-                // 2. Formatação estilo "Notinha" (Quebra linha na vírgula e no " e ")
+                // 2. QUEBRAS DE LINHA ESTRATÉGICAS ✂️
+                // Quebra na vírgula e no " e "
                 nomeExibicao = nomeExibicao.replace(/,/g, ',\n  '); 
                 nomeExibicao = nomeExibicao.replace(/ e /g, '\n  e ');
+                
+                // 🔥 CORREÇÃO ESPECÍFICA DO ESCONDIDINHO
+                // Transforma "Escondidinho de carne..." em duas linhas
+                nomeExibicao = nomeExibicao.replace(/Escondidinho de/gi, 'Escondidinho de\n  ');
+
                 nomeExibicao = nomeExibicao.charAt(0).toUpperCase() + nomeExibicao.slice(1);
 
                 // Define preço
@@ -285,9 +295,9 @@ app.post('/webhook', async (req, res) => {
                 // 3. Monta o visual final
                 resumoItens += `${item.quantidade}x ${nomeExibicao}\n`;
                 
-                // Preço alinhado à DIREITA
+                // Preço alinhado EXATAMENTE na direita (Linha de baixo)
                 const precoFormatado = `R$ ${totalItem.toFixed(2).replace('.', ',')}`;
-                resumoItens += precoFormatado.padStart(30, ' ') + `\n\n`; 
+                resumoItens += precoFormatado.padStart(TAMANHO_CUPOM, ' ') + `\n\n`; 
 
                 // Resumo simples para o ADMIN
                 resumoItensAdmin += `▪️ ${item.quantidade}x ${item.prato}\n`;
@@ -296,18 +306,25 @@ app.post('/webhook', async (req, res) => {
               const dataBr = new Date().toLocaleDateString('pt-BR');
               const horaBr = new Date().toLocaleTimeString('pt-BR').substring(0,5);
 
+              // Função auxiliar para alinhar valores totais
+              const alinharValor = (rotulo, valor) => {
+                  const valorStr = `R$ ${valor.toFixed(2).replace('.', ',')}`;
+                  const espacos = TAMANHO_CUPOM - rotulo.length - valorStr.length;
+                  return rotulo + ' '.repeat(Math.max(0, espacos)) + valorStr;
+              };
+
               const cupomCliente = `\`\`\`
       🧾  MELHOR MARMITA  🍱
       CUPOM: #${data.id.slice(-4)}
---------------------------------
+${SEPARADOR}
 CLIENTE: ${memoria.nome.toUpperCase()}
 DATA: ${dataBr} - ${horaBr}
---------------------------------
-${resumoItens}--------------------------------
-SUBTOTAL:       R$ ${subtotalVal.toFixed(2).replace('.',',').padStart(8, ' ')}
-FRETE:          R$ ${memoria.valorFrete.toFixed(2).replace('.',',').padStart(8, ' ')}
-TOTAL PAGO:     R$ ${valorPago.toFixed(2).replace('.',',').padStart(8, ' ')}
---------------------------------
+${SEPARADOR}
+${resumoItens}${SEPARADOR}
+${alinharValor("SUBTOTAL:", subtotalVal)}
+${alinharValor("FRETE:", memoria.valorFrete)}
+${alinharValor("TOTAL PAGO:", valorPago)}
+${SEPARADOR}
 ✅ PAGAMENTO CONFIRMADO
 \`\`\``;
 
@@ -315,7 +332,9 @@ TOTAL PAGO:     R$ ${valorPago.toFixed(2).replace('.',',').padStart(8, ' ')}
 
               await enviarMensagemWA(numeroCliente, cupomCliente);
               await enviarMensagemWA(numeroCliente, `Muito obrigado, ${memoria.nome}! Seu pedido já foi para a cozinha. 🍱🔥`);
-              await enviarMensagemWA(NUMERO_ADMIN, msgAdmin); 
+              
+              // Garante envio para o Admin (pela variável do Render OU fixo do código)
+              await enviarMensagemWA(process.env.NUMERO_ADMIN || NUMERO_ADMIN, msgAdmin); 
           }
         }
       } catch (error) { console.error("Erro Webhook:", error); }
