@@ -23,6 +23,7 @@ const estadoClientes = {
         pedido: [], 
         nome: '', 
         recebeuSaudacao: false,
+        pagamentoConfirmado: false,
         ultimoContato: Date.now()
       };
     }
@@ -35,6 +36,7 @@ const estadoClientes = {
       pedido: [], 
       nome: '',
       recebeuSaudacao: false,
+      pagamentoConfirmado: false,
       ultimoContato: Date.now()
     };
   },
@@ -43,6 +45,7 @@ const estadoClientes = {
     if (clientes[numero]) {
       clientes[numero].pedido = []; 
       clientes[numero].estado = 'MENU';
+      clientes[numero].pagamentoConfirmado = false;
     }
   }
 };
@@ -194,85 +197,87 @@ app.post('/webhook', async (req, res) => {
   const { action, data } = req.body;
 
   if (action === 'payment.created' || action === 'payment.updated') {
-     try {
-       const payment = new Payment(client);
-       const pagamentoInfo = await payment.get({ id: data.id });
-       
-       if (pagamentoInfo.status === 'approved') {
-         const numeroCliente = pagamentoInfo.external_reference; 
-         const valorPago = pagamentoInfo.transaction_amount;
-         const memoria = clientes[numeroCliente];
-         
-         if (memoria) {
-             memoria.estado = 'FINALIZADO';
-             let resumoItens = "";     
-             let resumoItensAdmin = ""; 
-             let subtotalVal = 0;
+      try {
+        const payment = new Payment(client);
+        const pagamentoInfo = await payment.get({ id: data.id });
+        
+        if (pagamentoInfo.status === 'approved') {
+          const numeroCliente = pagamentoInfo.external_reference; 
+          const valorPago = pagamentoInfo.transaction_amount;
+          const memoria = clientes[numeroCliente];
+          
+          if (memoria) {
+              // A CHAVE DO PROBLEMA: Só confirma o pagamento aqui!
+              memoria.pagamentoConfirmado = true;
+              memoria.estado = 'FINALIZADO';
+              
+              let resumoItens = "";     
+              let resumoItensAdmin = ""; 
+              let subtotalVal = 0;
 
-             memoria.pedido.forEach(item => {
-    let nomeExibicao = item.prato;
+              memoria.pedido.forEach(item => {
+                let nomeExibicao = item.prato;
 
-    if (item.arroz === 'Integral') {
-        nomeExibicao = nomeExibicao.replace(/arroz/gi, 'Arroz Integral');
-    }
-    if (item.strogonoff === 'Light') {
-        nomeExibicao = nomeExibicao.replace(/strogonoff/gi, 'Strogonoff Light');
-    }
+                if (item.arroz === 'Integral') {
+                    nomeExibicao = nomeExibicao.replace(/arroz/gi, 'Arroz Integral');
+                }
+                if (item.strogonoff === 'Light') {
+                    nomeExibicao = nomeExibicao.replace(/strogonoff/gi, 'Strogonoff Light');
+                }
 
-    nomeExibicao = nomeExibicao.replace(/cnoura/gi, 'cenoura');
-    nomeExibicao = nomeExibicao.charAt(0).toUpperCase() + nomeExibicao.slice(1);
+                nomeExibicao = nomeExibicao.replace(/cnoura/gi, 'cenoura');
+                nomeExibicao = nomeExibicao.charAt(0).toUpperCase() + nomeExibicao.slice(1);
 
-    const precoItem = item.quantidade >= 5 ? 0.01 : 19.99;
-    const totalItem = item.quantidade * precoItem;
-    subtotalVal += totalItem;
-    const totalStr = 'R$ ' + totalItem.toFixed(2).replace('.', ',');
+                const precoItem = item.quantidade >= 5 ? 0.01 : 19.99;
+                const totalItem = item.quantidade * precoItem;
+                subtotalVal += totalItem;
+                const totalStr = 'R$ ' + totalItem.toFixed(2).replace('.', ',');
 
-    let partes = nomeExibicao.split(',');
-    let linha1 = (partes[0] || '').trim();
-    let linha2 = (partes[1] || '').trim();
-    let linha3 = (partes[2] || '').trim();
+                let partes = nomeExibicao.split(',');
+                let linha1 = (partes[0] || '').trim();
+                let linha2 = (partes[1] || '').trim();
+                let linha3 = (partes[2] || '').trim();
 
-    resumoItens += `${item.quantidade}x ${linha1}\n`;
-    
-    if (linha2) {
-        resumoItens += `   ${linha2}\n`;
-    }
-    
-    if (linha3) {
-        let l3 = linha3.toLowerCase().startsWith('e ') ? linha3 : `e ${linha3}`;
-        resumoItens += `   ${l3}\n`;
-    }
+                resumoItens += `${item.quantidade}x ${linha1}\n`;
+                
+                if (linha2) {
+                    resumoItens += `   ${linha2}\n`;
+                }
+                
+                if (linha3) {
+                    let l3 = linha3.toLowerCase().startsWith('e ') ? linha3 : `e ${linha3}`;
+                    resumoItens += `   ${l3}\n`;
+                }
 
-    resumoItens += `${totalStr.padStart(32)}\n\n`;
+                resumoItens += `${totalStr.padStart(32)}\n\n`;
+                resumoItensAdmin += `▪️ ${item.quantidade}x ${nomeExibicao}\n`;
+              });
 
-    resumoItensAdmin += `▪️ ${item.quantidade}x ${nomeExibicao}\n`;
-});
+              const dataBr = new Date().toLocaleDateString('pt-BR');
+              const horaBr = new Date().toLocaleTimeString('pt-BR').substring(0,5);
 
-             const dataBr = new Date().toLocaleDateString('pt-BR');
-             const horaBr = new Date().toLocaleTimeString('pt-BR').substring(0,5);
-
-             const cupomCliente = 
+              const cupomCliente = 
 `\`\`\`
       🧾  MELHOR MARMITA  🍱
-     CUPOM DE PEDIDO: #${data.id.slice(-4)}
+      CUPOM DE PEDIDO: #${data.id.slice(-4)}
 --------------------------------------
 CLIENTE: ${memoria.nome.toUpperCase()}
 DATA: ${dataBr} - ${horaBr}
 --------------------------------------
-ITEM                    QTD    VALOR
+ITEM                     QTD    VALOR
 --------------------------------------
 ${resumoItens}
 --------------------------------------
-SUBTOTAL:                 R$ ${subtotalVal.toFixed(2)}
-FRETE:                    R$ ${memoria.valorFrete.toFixed(2)}
+SUBTOTAL:                   R$ ${subtotalVal.toFixed(2)}
+FRETE:                      R$ ${memoria.valorFrete.toFixed(2)}
 --------------------------------------
-TOTAL PAGO:               R$ ${valorPago.toFixed(2)}
+TOTAL PAGO:                 R$ ${valorPago.toFixed(2)}
 --------------------------------------
 ✅  PAGAMENTO CONFIRMADO
     OBRIGADO PELA PREFERÊNCIA!
 \`\`\``;
 
-             const msgAdmin = 
+              const msgAdmin = 
 `🔔 *NOVO PEDIDO PAGO!* 👨‍🍳🔥
 --------------------------------
 👤 *CLIENTE:* ${memoria.nome}
@@ -286,15 +291,15 @@ ${resumoItensAdmin}
 --------------------------------
 ✅ *Status:* PAGO`;
 
-             await enviarMensagemWA(numeroCliente, `Aqui está seu comprovante detalhado:`);
-             await enviarMensagemWA(numeroCliente, cupomCliente);
-             await enviarMensagemWA(numeroCliente, `Muito obrigado, ${memoria.nome}! Já enviamos para a cozinha. 🍱🔥`);
-             await enviarMensagemWA(NUMERO_ADMIN, msgAdmin);
-         }
-       }
-     } catch (error) { 
-       console.error("Erro Webhook:", error); 
-     }
+              await enviarMensagemWA(numeroCliente, `Aqui está seu comprovante detalhado:`);
+              await enviarMensagemWA(numeroCliente, cupomCliente);
+              await enviarMensagemWA(numeroCliente, `Muito obrigado, ${memoria.nome}! Já enviamos para a cozinha. 🍱🔥`);
+              await enviarMensagemWA(NUMERO_ADMIN, msgAdmin);
+          }
+        }
+      } catch (error) { 
+        console.error("Erro Webhook:", error); 
+      }
   }
   res.sendStatus(200);
 });
@@ -365,7 +370,7 @@ app.post('/mensagem', async (req, res) => {
     const remoteJid = dadosMensagem.key?.remoteJid || "";
     const fromMe = dadosMensagem.key?.fromMe;
     
-    // 🛡️ FILTRO DE SEGURANÇA (Ignora status, grupos e mensagens próprias)
+    // 🛡️ FILTRO DE SEGURANÇA
     if (remoteJid.includes('status') || remoteJid.includes('@g.us') || fromMe === true) {
         return res.status(200).json({ ok: true });
     }
@@ -378,33 +383,47 @@ app.post('/mensagem', async (req, res) => {
     const mensagem = texto.trim().toLowerCase();
     
     // ⏰ CONTROLE DE HORÁRIO
-const dataBrasil = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-const diaSemana = dataBrasil.getDay(); 
-const horaAtual = dataBrasil.getHours();
+    const dataBrasil = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+    const diaSemana = dataBrasil.getDay(); 
+    const horaAtual = dataBrasil.getHours();
 
-const isFinalDeSemana = (diaSemana === 0 || diaSemana === 6);
-const isForaDoHorario = (horaAtual < 8 || horaAtual >= 18);
+    const isFinalDeSemana = (diaSemana === 0 || diaSemana === 6);
+    const isForaDoHorario = (horaAtual < 8 || horaAtual >= 18);
 
-if (isFinalDeSemana || isForaDoHorario) {
-    if (numero !== NUMERO_ADMIN) {
-        const avisoFechado = `🍱 *Olá! A Melhor Marmita agradece seu contato.*\n\n` +
-                             `🚫 No momento estamos *FECHADOS*.\n\n` +
-                             `⏰ *Nosso horário de atendimento:*\n` +
-                             `🗓️ Segunda a Sexta\n` +
-                             `🕒 Das 08h às 18h\n\n` +
-                             `Sua mensagem foi recebida e responderemos assim que iniciarmos nosso expediente! 👋`;
+    if (isFinalDeSemana || isForaDoHorario) {
+        if (numero !== NUMERO_ADMIN) {
+            const avisoFechado = `🍱 *Olá! A Melhor Marmita agradece seu contato.*\n\n` +
+                                 `🚫 No momento estamos *FECHADOS*.\n\n` +
+                                 `⏰ *Nosso horário de atendimento:*\n` +
+                                 `🗓️ Segunda a Sexta\n` +
+                                 `🕒 Das 08h às 18h\n\n` +
+                                 `Sua mensagem foi recebida e responderemos assim que iniciarmos nosso expediente! 👋`;
 
-        await enviarMensagemWA(numero, avisoFechado);
+            await enviarMensagemWA(numero, avisoFechado);
+            return res.status(200).json({ ok: true });
+        }
+    }
+
+    // 🧠 GESTÃO DE MEMÓRIA E COMANDO GLOBAL
+    const memoria = estadoClientes.getEstado(numero);
+    iniciarTimerInatividade(numero);
+    memoria.ultimoContato = Date.now();
+
+    // 🚩 LÓGICA DE CANCELAMENTO (Resolve o bug do "Já Pago")
+    if (mensagem === 'cancelar' || mensagem === 'desistir') {
+        if (memoria.pagamentoConfirmado === true) {
+            await enviarMensagemWA(numero, "❌ *Pedido em produção!*\nSeu pagamento já foi confirmado e o pedido enviado para a cozinha. Para alterações, fale com o suporte.");
+        } else {
+            estadoClientes.resetarCliente(numero);
+            await enviarMensagemWA(numero, "✅ *Pedido cancelado com sucesso!*\nSua lista foi limpa. Se quiser começar de novo, basta digitar 'Oi'.");
+        }
         return res.status(200).json({ ok: true });
     }
-}
 
 // ⚙️ PROCESSAMENTO DO CLIENTE
-iniciarTimerInatividade(numero);
-
 const cliente = estadoClientes.getEstado(numero);
 cliente.ultimoContato = Date.now();
-let resposta = '';
+iniciarTimerInatividade(numero);
 
 console.log(`📩 Cliente ${numero}: "${mensagem}"`);
 
@@ -412,7 +431,7 @@ console.log(`📩 Cliente ${numero}: "${mensagem}"`);
 if (!cliente.recebeuSaudacao) {
   cliente.recebeuSaudacao = true;
   cliente.estado = 'PERGUNTANDO_NOME_INICIO';
-  resposta = `👋 Olá! Seja muito bem-vindo(a) à *Melhor Marmita* 🍱\n\nAntes de começarmos, *como gostaria de ser chamado(a)?*`;
+  let resposta = `👋 Olá! Seja muito bem-vindo(a) à *Melhor Marmita* 🍱\n\nAntes de começarmos, *como gostaria de ser chamado(a)?*`;
   cliente.ultimaMensagem = resposta; 
   await enviarMensagemWA(numero, resposta);
   return res.status(200).json({ ok: true });
@@ -426,29 +445,13 @@ if (cliente.estado === 'PERGUNTANDO_NOME_INICIO') {
     }
     cliente.nome = texto;
     cliente.estado = 'MENU';
-    resposta = `Prazer, ${cliente.nome}! 🤝\n\n` + menuPrincipal(cliente.nome);
+    let resposta = `Prazer, ${cliente.nome}! 🤝\n\n` + menuPrincipal(cliente.nome);
     cliente.ultimaMensagem = resposta;
     await enviarMensagemWA(numero, resposta);
     return res.status(200).json({ ok: true });
 }
 
-// ❌ CANCELAMENTO DE PEDIDO
-if (mensagem === 'cancelar') {
-  if (cliente.estado === 'FINALIZADO') {
-      await enviarMensagemWA(numero, `⚠️ *Pedido já pago e confirmado!*`);
-      return res.status(200).json({ ok: true });
-  }
-  const nomeSalvo = cliente.nome;
-  estadoClientes.resetarCliente(numero); 
-  const reset = estadoClientes.getEstado(numero);
-  reset.nome = nomeSalvo;
-  reset.recebeuSaudacao = true; 
-  reset.estado = 'MENU'; 
-  await enviarMensagemWA(numero, `❌ Pedido cancelado, ${nomeSalvo}.\n\n` + menuPrincipal(nomeSalvo));
-  return res.status(200).json({ ok: true });
-}
-
-   // 📋 NAVEGAÇÃO DO MENU
+// 📋 NAVEGAÇÃO DO MENU
 if (cliente.estado === 'MENU') {
   if (mensagem === '1') { 
     const dados = carregarMenu();
@@ -494,32 +497,34 @@ if (cliente.estado === 'MENU') {
   await enviarMensagemWA(numero, msgNaoEntendi(menuPrincipal(cliente.nome)));
   return res.status(200).json({ ok: true });
 }
-
+    
 // 🍽️ VISUALIZAÇÃO DO CARDÁPIO
+// 📖 VISUALIZAÇÃO DO CARDÁPIO
 if (cliente.estado === 'VENDO_CARDAPIO') {
-   if (mensagem === '2') {
-     const dados = carregarMenu();
-     let lista = `🍽️ *Vamos montar seu pedido!*\nDigite o NÚMERO do prato:\n\n`;
-     dados.forEach((item, i) => { lista += `${i + 1}️⃣  ${item.PRATO}\n`; });
-     lista += `\n0️⃣ Voltar`;
-     
-     cliente.estado = 'ESCOLHENDO_PRATO';
-     cliente.opcoesPrato = dados;
-     await enviarMensagemWA(numero, lista);
-     return res.status(200).json({ ok: true });
-   }
+  if (mensagem === '2') {
+    const dados = carregarMenu();
+    let lista = `🍽️ *Vamos montar seu pedido!*\nDigite o NÚMERO do prato:\n\n`;
+    dados.forEach((item, i) => { lista += `${i + 1}️⃣  ${item.PRATO}\n`; });
+    lista += `\n0️⃣ Voltar`;
+    
+    cliente.estado = 'ESCOLHENDO_PRATO';
+    cliente.opcoesPrato = dados;
+    cliente.ultimaMensagem = lista;
+    await enviarMensagemWA(numero, lista);
+    return res.status(200).json({ ok: true });
+  }
 
-   if (mensagem === '0') {
-     cliente.estado = 'MENU';
-     await enviarMensagemWA(numero, menuPrincipal(cliente.nome));
-     return res.status(200).json({ ok: true });
-   }
+  if (mensagem === '0') {
+    cliente.estado = 'MENU';
+    await enviarMensagemWA(numero, menuPrincipal(cliente.nome));
+    return res.status(200).json({ ok: true });
+  }
 
-   await enviarMensagemWA(numero, msgNaoEntendi(cliente.ultimaMensagem));
-   return res.status(200).json({ ok: true });
+  await enviarMensagemWA(numero, msgNaoEntendi(cliente.ultimaMensagem));
+  return res.status(200).json({ ok: true });
 }
 
-    // 🍱 MONTAGEM DO PEDIDO
+// 🛒 ESCOLHA DO PRATO
 if (cliente.estado === 'ESCOLHENDO_PRATO') {
   if (mensagem === '0') { 
       estadoClientes.limparCarrinhoManterMenu(numero); 
@@ -535,30 +540,35 @@ if (cliente.estado === 'ESCOLHENDO_PRATO') {
   
   const prato = cliente.opcoesPrato[escolha - 1];
   const nomePrato = prato.PRATO.toLowerCase();
+  let proximaResposta = '';
   
+  // Adiciona o item ao carrinho (quantidade começa em 0 para ser definida no próximo passo)
   cliente.pedido.push({ prato: prato.PRATO, valor: 19.99, arroz: null, strogonoff: null, quantidade: 0 });
+  
   cliente.precisaArroz = nomePrato.includes('arroz');
   cliente.precisaStrogonoff = nomePrato.includes('strogonoff');
 
   if (cliente.precisaArroz) {
     cliente.estado = 'VARIACAO_ARROZ';
-    resposta = `🍚 *Qual tipo de arroz?*\n\n1️⃣ Branco\n2️⃣ Integral`;
+    proximaResposta = `🍚 *Qual tipo de arroz?*\n\n1️⃣ Branco\n2️⃣ Integral`;
   } else if (cliente.precisaStrogonoff) {
     cliente.estado = 'VARIACAO_STROGONOFF';
-    resposta = `🍛 *Qual tipo de strogonoff?*\n\n1️⃣ Tradicional\n2️⃣ Light`;
+    proximaResposta = `🍛 *Qual tipo de strogonoff?*\n\n1️⃣ Tradicional\n2️⃣ Light`;
   } else {
     cliente.estado = 'QUANTIDADE';
-    resposta = `🔢 *Quantas marmitas deste prato deseja?*`;
+    proximaResposta = `🔢 *Quantas marmitas deste prato deseja?*`;
   }
 
-  cliente.ultimaMensagem = resposta;
-  await enviarMensagemWA(numero, resposta);
+  cliente.ultimaMensagem = proximaResposta;
+  await enviarMensagemWA(numero, proximaResposta);
   return res.status(200).json({ ok: true });
 }
 
-// 🌾 GESTÃO DE VARIAÇÕES (ARROZ/STROGONOFF)
+// 🌾 VARIAÇÕES (ARROZ)
 if (cliente.estado === 'VARIACAO_ARROZ') {
   const itemAtual = cliente.pedido[cliente.pedido.length - 1];
+  let proximaResposta = '';
+
   if (mensagem === '1' || mensagem.includes('branco')) itemAtual.arroz = 'Branco';
   else if (mensagem === '2' || mensagem.includes('integral')) itemAtual.arroz = 'Integral';
   else { 
@@ -568,19 +578,22 @@ if (cliente.estado === 'VARIACAO_ARROZ') {
 
   if (cliente.precisaStrogonoff) {
     cliente.estado = 'VARIACAO_STROGONOFF';
-    resposta = `🍛 *Qual tipo de strogonoff?*\n\n1️⃣ Tradicional\n2️⃣ Light`;
+    proximaResposta = `🍛 *Qual tipo de strogonoff?*\n\n1️⃣ Tradicional\n2️⃣ Light`;
   } else {
     cliente.estado = 'QUANTIDADE';
-    resposta = `🔢 *Quantas marmitas deste prato deseja?*`;
+    proximaResposta = `🔢 *Quantas marmitas deste prato deseja?*`;
   }
   
-  cliente.ultimaMensagem = resposta;
-  await enviarMensagemWA(numero, resposta);
+  cliente.ultimaMensagem = proximaResposta;
+  await enviarMensagemWA(numero, proximaResposta);
   return res.status(200).json({ ok: true });
 }
 
+// 🥘 VARIAÇÕES (STROGONOFF)
 if (cliente.estado === 'VARIACAO_STROGONOFF') {
   const itemAtual = cliente.pedido[cliente.pedido.length - 1];
+  let proximaResposta = '';
+
   if (mensagem === '1' || mensagem.includes('tradicional')) itemAtual.strogonoff = 'Tradicional';
   else if (mensagem === '2' || mensagem.includes('light')) itemAtual.strogonoff = 'Light';
   else { 
@@ -589,13 +602,14 @@ if (cliente.estado === 'VARIACAO_STROGONOFF') {
   }
 
   cliente.estado = 'QUANTIDADE';
-  resposta = `🔢 *Quantas marmitas deste prato deseja?*`;
-  cliente.ultimaMensagem = resposta;
-  await enviarMensagemWA(numero, resposta); 
+  proximaResposta = `🔢 *Quantas marmitas deste prato deseja?*`;
+  cliente.ultimaMensagem = proximaResposta;
+  await enviarMensagemWA(numero, proximaResposta); 
   return res.status(200).json({ ok: true });
 }
-
+    
 // 📈 QUANTIDADE E CARRINHO
+// 🔢 DEFINIÇÃO DE QUANTIDADE
 if (cliente.estado === 'QUANTIDADE') {
   const qtd = parseInt(mensagem);
   if (isNaN(qtd) || qtd < 1) { 
@@ -605,14 +619,14 @@ if (cliente.estado === 'QUANTIDADE') {
 
   cliente.pedido[cliente.pedido.length - 1].quantidade = qtd;
   cliente.estado = 'ADICIONAR_OUTRO';
-  resposta = `✅ *Adicionado!*\n\nDeseja pedir mais alguma coisa, ${cliente.nome}?\n\n1️⃣ Sim, escolher outro prato\n2️⃣ Não, fechar pedido`;
+  let resposta = `✅ *Adicionado!*\n\nDeseja pedir mais alguma coisa, ${cliente.nome}?\n\n1️⃣ Sim, escolher outro prato\n2️⃣ Não, fechar pedido`;
   
   cliente.ultimaMensagem = resposta;
   await enviarMensagemWA(numero, resposta);
   return res.status(200).json({ ok: true });
 }
 
-// 🏁 RESUMO E FECHAMENTO
+// 🏁 RESUMO E FECHAMENTO DE CARRINHO
 if (cliente.estado === 'ADICIONAR_OUTRO') {
   if (mensagem === '1' || mensagem.includes('sim')) {
     cliente.estado = 'ESCOLHENDO_PRATO';
@@ -628,20 +642,16 @@ if (cliente.estado === 'ADICIONAR_OUTRO') {
 
   if (mensagem === '2' || mensagem.includes('nao') || mensagem.includes('não')) {
     const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
-    let valorUnitario = 19.99;
-    let textoPreco = "R$ 19,99/un";
-    let msgPromo = "";
-
-    if (totalMarmitas >= 5) {
-      valorUnitario = 0.01;
-      textoPreco = "R$ 17,49 (Promoção)"; 
-      msgPromo = "🎉 *PROMOÇÃO APLICADA!* (Acima de 5 un)\n";
-    }
+    
+    // Regra de Negócio: Promoção acima de 5 marmitas
+    let valorUnitario = totalMarmitas >= 5 ? 0.01 : 19.99; // Mantendo 0.01 para seus testes
+    let textoPreco = totalMarmitas >= 5 ? "R$ 17,49 (Promoção)" : "R$ 19,99/un";
+    let msgPromo = totalMarmitas >= 5 ? "🎉 *PROMOÇÃO APLICADA!* (Acima de 5 un)\n" : "";
 
     const subtotal = (totalMarmitas * valorUnitario).toFixed(2);
     cliente.estado = 'AGUARDANDO_CEP'; 
 
-    resposta = `📝 *Resumo do Pedido de ${cliente.nome}:*\n\n${msgPromo}Marmitas: ${totalMarmitas}\nValor: ${textoPreco}\n💰 *Subtotal: R$ ${subtotal}* (Sem frete)\n------------------------------\n\n📍 Para calcular a entrega, digite seu *CEP* (apenas números):`;
+    let resposta = `📝 *Resumo do Pedido de ${cliente.nome}:*\n\n${msgPromo}Marmitas: ${totalMarmitas}\nValor: ${textoPreco}\n💰 *Subtotal: R$ ${subtotal.replace('.', ',')}* (Sem frete)\n------------------------------\n\n📍 Para calcular a entrega, digite seu *CEP* (apenas números):`;
     
     cliente.ultimaMensagem = resposta;
     await enviarMensagemWA(numero, resposta); 
@@ -658,17 +668,24 @@ if (cliente.estado === 'ADICIONAR_OUTRO') {
   return res.status(200).json({ ok: true });
 }
 
-   // 📍 GESTÃO DE ENTREGA E CEP
+// 📍 CÁLCULO DE FRETE (GOOGLE MAPS)
 if (cliente.estado === 'AGUARDANDO_CEP') {
+    const cepLimpo = mensagem.replace(/\D/g, '');
+    
+    if (cepLimpo.length !== 8) {
+        await enviarMensagemWA(numero, "⚠️ CEP inválido. Por favor, digite os 8 números do seu CEP.");
+        return res.status(200).json({ ok: true });
+    }
+
     await enviarMensagemWA(numero, "🔍 Calculando rota no Google Maps... Só um instante.");
-    const frete = await calcularFreteGoogle(texto);
+    const frete = await calcularFreteGoogle(cepLimpo);
     
     if (frete.erro) {
         await enviarMensagemWA(numero, frete.msg);
         return res.status(200).json({ ok: true });
     }
 
-    cliente.endereco = `CEP: ${texto} (${frete.endereco})`; 
+    cliente.endereco = `CEP: ${cepLimpo} (${frete.endereco})`; 
     
     const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
     const valorUnitario = totalMarmitas >= 5 ? 0.01 : 19.99;
@@ -679,13 +696,14 @@ if (cliente.estado === 'AGUARDANDO_CEP') {
     cliente.totalFinal = totalComFrete;
     cliente.estado = 'CONFIRMANDO_ENDERECO_COMPLEMENTO';
     
-    resposta = `✅ *Localizado!*\n📍 ${frete.endereco}\n🚚 Frete: *${frete.texto}*\n\n${cliente.nome}, por favor digite o *NÚMERO DA CASA* e *COMPLEMENTO*:\n\n_(Ou digite *0* para corrigir o CEP)_`;
+    let resposta = `✅ *Localizado!*\n📍 ${frete.endereco}\n🚚 Frete: *${frete.texto}*\n\n${cliente.nome}, por favor digite o *NÚMERO DA CASA* e *COMPLEMENTO*:\n\n_(Ou digite *0* para corrigir o CEP)_`;
     cliente.ultimaMensagem = resposta;
     await enviarMensagemWA(numero, resposta); 
     return res.status(200).json({ ok: true });
 }
 
 // 🏠 CONFIRMAÇÃO DE ENDEREÇO E PAGAMENTO
+// 🏠 ENDEREÇO E COMPLEMENTO
 if (cliente.estado === 'CONFIRMANDO_ENDERECO_COMPLEMENTO') {
     if (mensagem === '0') {
         cliente.estado = 'AGUARDANDO_CEP';
@@ -698,16 +716,23 @@ if (cliente.estado === 'CONFIRMANDO_ENDERECO_COMPLEMENTO') {
     cliente.endereco += ` - Compl: ${texto}`;
     cliente.estado = 'ESCOLHENDO_PAGAMENTO';
     
-    resposta = `📝 *Fechamento da Conta:*\n👤 Cliente: ${cliente.nome}\n💰 *TOTAL FINAL: R$ ${cliente.totalFinal.toFixed(2)}*\n\n🚚 *Entrega prevista: de 3 a 5 dias* (Sob encomenda)\n\n💳 *Como deseja pagar?*\n1️⃣ PIX (Aprovação Imediata)\n2️⃣ Cartão de Crédito/Débito (Link)`;
+    let resumoPgto = `📝 *Fechamento da Conta:*\n👤 Cliente: ${cliente.nome}\n💰 *TOTAL FINAL: R$ ${cliente.totalFinal.toFixed(2).replace('.', ',')}*\n\n🚚 *Entrega prevista: de 3 a 5 dias*\n\n💳 *Como deseja pagar?*\n1️⃣ PIX (Aprovação Imediata)\n2️⃣ Cartão de Crédito/Débito (Link)\n\n0️⃣ Voltar para o CEP`;
     
-    cliente.ultimaMensagem = resposta;
-    await enviarMensagemWA(numero, resposta);
+    cliente.ultimaMensagem = resumoPgto;
+    await enviarMensagemWA(numero, resumoPgto);
     return res.status(200).json({ ok: true });
 }
-    
-    // 💳 OPÇÕES DE PAGAMENTO
-if (cliente.estado === 'ESCOLHENDO_PAGAMENTO') {
-  cliente.pagamento = texto; 
+
+// 💳 GESTÃO DE PAGAMENTO (PERMITE MUDAR)
+if (cliente.estado === 'ESCOLHENDO_PAGAMENTO' || cliente.estado === 'AGUARDANDO_PAGAMENTO') {
+  
+  // Opção para MUDAR a forma de pagamento ou voltar
+  if (mensagem === '0' || mensagem === 'mudar') {
+      cliente.estado = 'ESCOLHENDO_PAGAMENTO';
+      let msgMudar = `🔄 *Mudar forma de pagamento:*\n\n1️⃣ PIX (Aprovação Imediata)\n2️⃣ Cartão de Crédito/Débito (Link)`;
+      await enviarMensagemWA(numero, msgMudar);
+      return res.status(200).json({ ok: true });
+  }
 
   if (mensagem === '1' || mensagem.includes('pix')) {
      await enviarMensagemWA(numero, "💠 *Gerando PIX Copia e Cola...*");
@@ -716,9 +741,10 @@ if (cliente.estado === 'ESCOLHENDO_PAGAMENTO') {
      if (dadosPix) {
          await enviarMensagemWA(numero, `Aqui está seu código PIX:`);
          await enviarMensagemWA(numero, dadosPix.copiaCola); 
-         await enviarMensagemWA(numero, `✅ *Copie o código acima e cole no aplicativo do seu banco.*`);
+         await enviarMensagemWA(numero, `✅ *Copie o código acima e cole no aplicativo do seu banco.*\n\n_(Se quiser mudar para cartão, digite *0*)_`);
+         cliente.estado = 'AGUARDANDO_PAGAMENTO'; // Fica aguardando o webhook
      } else {
-         await enviarMensagemWA(numero, "⚠️ Ocorreu uma instabilidade ao gerar o PIX. Por favor, tente novamente em instantes.");
+         await enviarMensagemWA(numero, "⚠️ Ocorreu uma instabilidade ao gerar o PIX. Tente novamente em instantes.");
      }
   } 
   else if (mensagem === '2' || mensagem.includes('cartao') || mensagem.includes('cartão')) {
@@ -726,28 +752,26 @@ if (cliente.estado === 'ESCOLHENDO_PAGAMENTO') {
      const link = await gerarLinkPagamento(cliente.pedido, cliente.valorFrete, numero);
      
      if (link) {
-         await enviarMensagemWA(numero, `✅ *Link gerado com sucesso! Clique abaixo para pagar:*\n\n${link}`);
+         await enviarMensagemWA(numero, `✅ *Link gerado! Clique abaixo para pagar:*\n\n${link}\n\n_(Se quiser mudar para PIX, digite *0*)_`);
+         cliente.estado = 'AGUARDANDO_PAGAMENTO'; // Fica aguardando o webhook
      } else {
-         await enviarMensagemWA(numero, "⚠️ Não conseguimos gerar o link de cartão. Tente a opção PIX ou tente novamente mais tarde.");
+         await enviarMensagemWA(numero, "⚠️ Não conseguimos gerar o link de cartão. Tente a opção PIX.");
      }
   }
-  else {
+  else if (cliente.estado === 'ESCOLHENDO_PAGAMENTO') {
       await enviarMensagemWA(numero, msgNaoEntendi(cliente.ultimaMensagem));
-      return res.status(200).json({ ok: true });
   }
-
-  cliente.estado = 'FINALIZADO';
   return res.status(200).json({ ok: true });
 }
 
-// 🏁 STATUS: PEDIDO CONCLUÍDO
+// 🏁 STATUS: PEDIDO PAGO E FINALIZADO
 if (cliente.estado === 'FINALIZADO') {
    if (mensagem === 'menu' || mensagem === '0') {
        estadoClientes.resetarCliente(numero);
        await enviarMensagemWA(numero, menuPrincipal());
        return res.status(200).json({ ok: true });
    }
-   await enviarMensagemWA(numero, `👋 Olá, ${cliente.nome}! Seu pedido já está na nossa lista de produção. \n\nPara iniciar um *novo pedido*, basta digitar *MENU*.`);
+   await enviarMensagemWA(numero, `👋 Olá, ${cliente.nome}! Seu pedido já está na nossa lista de produção.\n\nPara iniciar um *novo pedido*, basta digitar *MENU*.`);
    return res.status(200).json({ ok: true });
 }
 
@@ -755,11 +779,11 @@ if (cliente.estado === 'FINALIZADO') {
 if (cliente.estado === 'ELOGIOS') {
   console.log(`[FEEDBACK] Cliente ${numero}: ${texto}`);
   cliente.estado = 'MENU';
-  await enviarMensagemWA(numero, `✅ Muito obrigado! Seu feedback foi registrado e é muito importante para nós. Assim que possivel, um atendente lhe dará uma resposta se necessário.\n\n` + menuPrincipal(cliente.nome));
+  await enviarMensagemWA(numero, `✅ Muito obrigado! Seu feedback foi registrado.\n\n` + menuPrincipal(cliente.nome));
   return res.status(200).json({ ok: true });
 }
 
-// 🔄 TRATAMENTO GLOBAL E INICIALIZAÇÃO
+// 🔄 TRATAMENTO GLOBAL E FINALIZAÇÃO
     await enviarMensagemWA(numero, `👋 Olá! Bem-vindo de volta, ${cliente.nome || 'Visitante'}!\n\n` + menuPrincipal(cliente.nome));
     return res.status(200).json({ ok: true });
 
