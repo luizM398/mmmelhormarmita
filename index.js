@@ -507,6 +507,7 @@ if (cliente.estado === 'ESCOLHENDO_PRATO') {
 }
 
 // 🌾 VARIAÇÕES (ARROZ)
+// 🍚 VARIAÇÕES (ARROZ)
 if (cliente.estado === 'VARIACAO_ARROZ') {
   const itemAtual = cliente.pedido[cliente.pedido.length - 1];
   let proximaResposta = '';
@@ -584,15 +585,22 @@ if (cliente.estado === 'ADICIONAR_OUTRO') {
   if (mensagem === '2' || mensagem.includes('nao') || mensagem.includes('não')) {
     const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
     
-    // Regra de Negócio: Promoção acima de 5 marmitas
-    let valorUnitario = totalMarmitas >= 5 ? 0.01 : 19.99; // Mantendo 0.01 para seus testes
+    // Regra de Promoção (Preços oficiais)
+    let valorUnitario = totalMarmitas >= 5 ? 17.49 : 19.99; 
     let textoPreco = totalMarmitas >= 5 ? "R$ 17,49 (Promoção)" : "R$ 19,99/un";
     let msgPromo = totalMarmitas >= 5 ? "🎉 *PROMOÇÃO APLICADA!* (Acima de 5 un)\n" : "";
 
     const subtotal = (totalMarmitas * valorUnitario).toFixed(2);
+    cliente.totalMarmitas = totalMarmitas; 
+    cliente.subtotal = parseFloat(subtotal);
     cliente.estado = 'AGUARDANDO_CEP'; 
 
-    let resposta = `📝 *Resumo do Pedido de ${cliente.nome}:*\n\n${msgPromo}Marmitas: ${totalMarmitas}\nValor: ${textoPreco}\n💰 *Subtotal: R$ ${subtotal.replace('.', ',')}* (Sem frete)\n------------------------------\n\n📍 Para calcular a entrega, digite seu *CEP* (apenas números):`;
+    let resposta = `📝 *Resumo do Pedido de ${cliente.nome}:*\n\n` +
+                   `${msgPromo}` +
+                   `📦 Itens: ${totalMarmitas} marmitas\n` +
+                   `💰 *Subtotal: R$ ${subtotal.replace('.', ',')}* (Sem frete)\n` +
+                   `------------------------------\n\n` +
+                   `📍 Para calcular a entrega, digite seu *CEP*:`;
     
     cliente.ultimaMensagem = resposta;
     await enviarMensagemWA(numero, resposta); 
@@ -600,15 +608,15 @@ if (cliente.estado === 'ADICIONAR_OUTRO') {
   }
 
   if (mensagem === '0') {
-     estadoClientes.limparCarrinhoManterMenu(numero);
-     await enviarMensagemWA(numero, menuPrincipal(cliente.nome));
-     return res.status(200).json({ ok: true });
+      estadoClientes.limparCarrinhoManterMenu(numero);
+      await enviarMensagemWA(numero, menuPrincipal(cliente.nome));
+      return res.status(200).json({ ok: true });
   }
 
   await enviarMensagemWA(numero, msgNaoEntendi(cliente.ultimaMensagem));
   return res.status(200).json({ ok: true });
 }
-
+    
 // 📍 CÁLCULO DE FRETE (GOOGLE MAPS)
 if (cliente.estado === 'AGUARDANDO_CEP') {
     const cepLimpo = mensagem.replace(/\D/g, '');
