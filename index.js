@@ -460,7 +460,7 @@ if (cliente.estado === 'MENU') {
         return res.status(200).json({ok:true}); 
     }
 
-    let cardapio = `🍱 *Cardápio do Dia para ${cliente.nome}*\n🔥 *PROMOÇÃO:* Acima de 5 unid = *R$ 17,49/un*!\n\n`;
+    let cardapio = `🍱 *Cardápio do Dia para ${cliente.nome}*\n🔥 *PROMOÇÃO:* Acima de 5 unid o preço *CAI* de ~~19,99~~ para *R$ 17,49/un*!\n\n`;
     dados.forEach(item => { cardapio += `🔹 ${item.PRATO} – R$ 19,99\n`; });
     cardapio += `\nPara fazer seu pedido, digite *2*.\nOu digite *0* para voltar.`;
     
