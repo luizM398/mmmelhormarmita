@@ -71,59 +71,7 @@ const client = new MercadoPagoConfig({
 const MAPBOX_ACCESS_TOKEN = process.env.MAPBOX_ACCESS_TOKEN; 
 const COORD_COZINHA = "-51.11161606538164,-30.109913348576296"; // Rua Guaíba, 10
 
-// 🚚 MOTOR DE FRETE (HÍBRIDO: VIACEP + MAPBOX)
-async function calcularFreteGoogle(cepDestino) {
-  console.log(`🔎 [DEBUG] Iniciando cálculo HÍBRIDO para: ${cepDestino}`);
-  
-  if (!MAPBOX_ACCESS_TOKEN) {
-      return { erro: true, msg: "Erro interno (Token Mapbox ausente)." };
-  }
-
-  try {
-    // 1. LIMPEZA DO CEP
-    const cepLimpo = String(cepDestino).replace(/\D/g, '');
-    if (cepLimpo.length !== 8) return { erro: true, msg: "⚠️ CEP inválido. Digite os 8 números." };
-
-    // 2. CONSULTA O VIACEP (Para descobrir o nome da rua)
-    console.log("🇧🇷 [DEBUG] Consultando ViaCEP...");
-    const urlViaCep = `https://viacep.com.br/ws/${cepLimpo}/json/`;
-    const viaCepRes = await axios.get(urlViaCep);
-
-    if (viaCepRes.data.erro) {
-        console.log("❌ [DEBUG] ViaCEP não encontrou este CEP.");
-        return { erro: true, msg: "❌ CEP não encontrado na base dos Correios." };
-    }
-
-    // Monta o endereço exato com o retorno do ViaCEP
-    // Ex: "Rua da Represa, Porto Alegre, Rio Grande do Sul, Brasil"
-    const enderecoTexto = `${viaCepRes.data.logradouro}, ${viaCepRes.data.localidade}, ${viaCepRes.data.uf}, Brasil`;
-    console.log(`✅ [DEBUG] Endereço descoberto: ${enderecoTexto}`);
-
-    // 3. MAPBOX GEOCODING (Agora procuramos pelo NOME DA RUA, que é infalível)
-    // Usamos encodeURIComponent para garantir que espaços e acentos não quebrem o link
-    const urlGeo = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(enderecoTexto)}.json?country=br&limit=1&access_token=${MAPBOX_ACCESS_TOKEN}`;
-    const geoRes = await axios.get(urlGeo);
-    
-    if (!geoRes.data.features || geoRes.data.features.length === 0) {
-        return { erro: true, msg: "❌ O mapa não conseguiu localizar a rua informada." };
-    }
-
-    const destino = geoRes.data.features[0];
-    const coordsDestino = destino.center.join(','); // Longitude,Latitude
-    
-    // 4. CÁLCULO DA ROTA (Directions)
-    console.log("🚗 [DEBUG] Calculando rota exata até a rua...");
-    const urlDist = `https://api.mapbox.com/directions/v5/mapbox/driving/${COORD_COZINHA};${coordsDestino}?access_token=${MAPBOX_ACCESS_TOKEN}`;
-    const distRes = await axios.get(urlDist);
-
-    if (!distRes.data.routes || distRes.data.routes.length === 0) {
-        return { erro: true, msg: "🚫 Rota não encontrada." };
-    }
-
-    const distanciaKm = distRes.data.routes[0].distance / 1000;
-    console.log(`📏 [DEBUG] Distância Final: ${distanciaKm.toFixed(2)} km`);
-
-  // 🚚 MOTOR DE FRETE (VERSÃO FINAL: HÍBRIDO + PREÇO AJUSTADO)
+// 🚚 MOTOR DE FRETE (VERSÃO FINAL: HÍBRIDO + PREÇO AJUSTADO)
 async function calcularFreteGoogle(cepDestino) {
   console.log(`🔎 [DEBUG] Iniciando cálculo para o CEP: ${cepDestino}`);
   
@@ -151,7 +99,6 @@ async function calcularFreteGoogle(cepDestino) {
     console.log(`✅ [DEBUG] Endereço descoberto: ${enderecoTexto}`);
 
     // 3. MAPBOX GEOCODING (Com preferência para perto da sua cozinha)
-    // &proximity=${COORD_COZINHA} é o segredo para não pegar rua com mesmo nome longe!
     const urlGeo = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(enderecoTexto)}.json?country=br&limit=1&proximity=${COORD_COZINHA}&access_token=${MAPBOX_ACCESS_TOKEN}`;
     const geoRes = await axios.get(urlGeo);
     
@@ -213,7 +160,6 @@ async function calcularFreteGoogle(cepDestino) {
     return { valor: 15.00, texto: "R$ 15,00 (Contingência)", endereco: "Endereço via CEP" };
   }
 }
-
 // 💰 PROCESSAMENTO DE PAGAMENTOS
 async function gerarPix(valor, clienteNome, clienteTelefone) {
   try {
