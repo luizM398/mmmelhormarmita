@@ -438,12 +438,14 @@ app.post('/mensagem', async (req, res) => {
         if (cliente.pagamentoConfirmado) {
             await enviarMensagemWA(numero, "❌ *Pedido em produção!* O pagamento já foi aprovado. Para alterações, fale com o suporte.");
         } else {
-            estadoClientes.resetarCliente(numero);
-            await enviarMensagemWA(numero, "✅ *Pedido cancelado!* Sua lista foi limpa.");
+            // Limpa só o pedido, mantém o nome e joga pro Menu
+            estadoClientes.limparCarrinhoManterMenu(numero);
+            
+            await enviarMensagemWA(numero, "✅ Pedido cancelado.");
+            await enviarMensagemWA(numero, menuPrincipal(cliente.nome));
         }
         return res.status(200).json({ ok: true });
     }
-
     console.log(`📩 Cliente ${numero} (${cliente.estado}): "${mensagem}"`);
 
 // 👋 SAUDAÇÃO INICIAL
