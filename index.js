@@ -92,16 +92,16 @@ async function calcularFreteGoogle(cepDestino) {
     const cepFormatado = cepLimpo.replace(/^(\d{5})(\d{3})/, "$1-$2");
     console.log(`📡 [DEBUG] Buscando CEP formatado: ${cepFormatado}`);
 
-   // Tenta buscar com o formato certinho (com traço)
-    // 👇 AQUI EU TIREI O "&types=postcode" DA LINHA ABAIXO
-    let urlGeo = `https://api.mapbox.com/geocoding/v5/mapbox.places/${cepFormatado}.json?country=br&access_token=${MAPBOX_ACCESS_TOKEN}`;
+  // Tenta buscar com o formato certinho + CIDADE (O Truque Mestre)
+    // 👇 ADICIONEI ", Porto Alegre, RS" PARA FORÇAR ELE A ACHAR
+    let urlGeo = `https://api.mapbox.com/geocoding/v5/mapbox.places/${cepFormatado}, Porto Alegre, RS.json?country=br&access_token=${MAPBOX_ACCESS_TOKEN}`;
     let geoRes = await axios.get(urlGeo);
     
-    // Se o Mapbox for chato e não achar, tentamos sem o traço (Plano B)
+    // Se falhar, tenta sem o traço + CIDADE
     if (!geoRes.data.features || geoRes.data.features.length === 0) {
-        console.log("⚠️ [DEBUG] Tentando sem hífen...");
-        // 👇 AQUI EU TIREI TAMBÉM
-        urlGeo = `https://api.mapbox.com/geocoding/v5/mapbox.places/${cepLimpo}.json?country=br&access_token=${MAPBOX_ACCESS_TOKEN}`;
+        console.log("⚠️ [DEBUG] Tentando sem hífen com cidade...");
+        // 👇 ADICIONEI AQUI TAMBÉM
+        urlGeo = `https://api.mapbox.com/geocoding/v5/mapbox.places/${cepLimpo}, Porto Alegre, RS.json?country=br&access_token=${MAPBOX_ACCESS_TOKEN}`;
         geoRes = await axios.get(urlGeo);
     }
 
