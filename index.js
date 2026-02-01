@@ -355,7 +355,7 @@ function carregarMenu() {
 
 // ⏱️ CONTROLE DE INATIVIDADE (Timer)
 const timersClientes = {};
-const TEMPO_INATIVO = 20 * 60 * 1000; // 20 minutos
+const TEMPO_INATIVO = 10 * 60 * 1000; // 20 minutos
 
 function iniciarTimerInatividade(numero) {
   if (timersClientes[numero]) clearTimeout(timersClientes[numero]);
