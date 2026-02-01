@@ -138,7 +138,7 @@ async function calcularFreteGoogle(cepDestino) {
 
     // Até 3km -> R$ 5,00
     if (distanciaKm <= 3.0) { 
-        valor = 5.00; 
+        valor = 1.00; 
         texto = "R$ 5,00"; 
     } 
     // De 3km até 8km -> R$ 10,00
