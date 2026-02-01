@@ -494,7 +494,7 @@ if (cliente.estado === 'MENU') {
   // 👇 OPÇÃO 3 (FEEDBACK / FALAR COM ATENDENTE)
   if (mensagem === '3') { 
     cliente.estado = 'ELOGIOS';
-    await enviarMensagemWA(numero, `💬 *Fale com o Atendente*\n\n${cliente.nome}, escreva abaixo sua mensagem, elogio, crítica ou sugestão.\n\nEu vou enviar *diretamente para o dono* ler agora mesmo! 👇\n\n(Digite 0 para cancelar e voltar)`); 
+    await enviarMensagemWA(numero, `💬 *Fale com o Atendente*\n\n${cliente.nome}, escreva abaixo sua mensagem, elogio, crítica ou sugestão.👇\n\n(Digite 0 para cancelar e voltar)`); 
     return res.status(200).json({ ok: true });
   }
 
