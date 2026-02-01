@@ -1,6 +1,8 @@
+require('dotenv').config(); // 👈 IMPORTANTE: Para ler suas chaves do .env
 const express = require('express');
 const path = require('path');
 const axios = require('axios');
+const xlsx = require('xlsx'); // 👈 IMPORTANTE: Para ler seu cardápio em Excel
 const { MercadoPagoConfig, Payment, Preference } = require('mercadopago');
 
 // 🧠 MEMÓRIA DO SISTEMA
@@ -57,17 +59,16 @@ const client = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN || 'SEU_TOKEN_MP_AQUI'
 });
 
-// 🗺️ CONFIGURAÇÃO MAPBOX (Substituindo o Google)
+// 🗺️ CONFIGURAÇÃO MAPBOX
 const MAPBOX_ACCESS_TOKEN = process.env.MAPBOX_ACCESS_TOKEN; 
-const COORD_COZINHA = "-51.130867,-30.111452"; // Longitude, Latitude da Rua Guaíba, 10
+const COORD_COZINHA = "-51.130867,-30.111452"; // Rua Guaíba, 10
 
-// 🚚 MOTOR DE FRETE (Mapbox + Contingência)
+// 🚚 MOTOR DE FRETE (Mapbox)
 async function calcularFreteGoogle(cepDestino) {
   try {
     const cepLimpo = String(cepDestino).replace(/\D/g, '');
     if (cepLimpo.length !== 8) return { erro: true, msg: "⚠️ CEP inválido. Digite os 8 números." };
 
-    // 1. Geocoding: Localiza o endereço e as coordenadas pelo CEP
     const urlGeo = `https://api.mapbox.com/geocoding/v5/mapbox.places/${cepLimpo}.json?country=br&access_token=${MAPBOX_ACCESS_TOKEN}`;
     const geoRes = await axios.get(urlGeo);
     
@@ -76,40 +77,30 @@ async function calcularFreteGoogle(cepDestino) {
     }
 
     const destino = geoRes.data.features[0];
-    const coordsDestino = destino.center.join(','); // Formato Long,Lat
+    const coordsDestino = destino.center.join(',');
     const enderecoFormatado = destino.place_name;
 
-    // 2. Directions: Calcula a distância real por rota de carro
     const urlDist = `https://api.mapbox.com/directions/v5/mapbox/driving/${COORD_COZINHA};${coordsDestino}?access_token=${MAPBOX_ACCESS_TOKEN}`;
     const distRes = await axios.get(urlDist);
 
     if (!distRes.data.routes || distRes.data.routes.length === 0) {
-        return { erro: true, msg: "🚫 Não foi possível traçar uma rota para este local." };
+        return { erro: true, msg: "🚫 Rota não encontrada." };
     }
 
     const distanciaKm = distRes.data.routes[0].distance / 1000;
-    console.log(`📏 Frete: ${distanciaKm.toFixed(2)}km para ${enderecoFormatado}`);
-
-    // 3. Tabela de Preços (Conforme faixas do negócio)
+    
     let valor = 15.00;
     let texto = "R$ 15,00";
-
     if (distanciaKm <= 2.0) { valor = 5.00; texto = "R$ 5,00"; }
     else if (distanciaKm <= 5.0) { valor = 8.00; texto = "R$ 8,00"; }
     else if (distanciaKm <= 10.0) { valor = 12.00; texto = "R$ 12,00"; }
     
-    if (distanciaKm > 20.0) return { erro: true, msg: "🚫 Endereço fora da área de entrega (limite 20km)." };
+    if (distanciaKm > 20.0) return { erro: true, msg: "🚫 Fora da área de entrega (limite 20km)." };
 
     return { valor, texto, endereco: enderecoFormatado };
 
   } catch (error) {
-    console.error("⚠️ Erro Crítico Mapbox:", error.message);
-    // Contingência: Caso a API falhe, permite seguir com frete fixo para não perder a venda
-    return { 
-        valor: 8.00, 
-        texto: "R$ 8,00 (Taxa fixa)", 
-        endereco: "Endereço a confirmar no próximo passo" 
-    };
+    return { valor: 8.00, texto: "R$ 8,00 (Fixo)", endereco: "Endereço via CEP" };
   }
 }
 
