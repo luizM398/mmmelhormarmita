@@ -498,7 +498,6 @@ if (cliente.estado === 'MENU') {
   return res.status(200).json({ ok: true });
 }
     
-// 🍽️ VISUALIZAÇÃO DO CARDÁPIO
 // 📖 VISUALIZAÇÃO DO CARDÁPIO
 if (cliente.estado === 'VENDO_CARDAPIO') {
   if (mensagem === '2') {
