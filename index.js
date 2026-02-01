@@ -5,18 +5,33 @@ const axios = require('axios');
 const xlsx = require('xlsx'); 
 const { MercadoPagoConfig, Payment, Preference } = require('mercadopago');
 
-// 👇👇 AQUI ESTAVA FALTANDO ESSAS 4 LINHAS: 👇👇
+// ----------------------------------------------------------------------
+// ⚙️ CONFIGURAÇÕES GERAIS
+// ----------------------------------------------------------------------
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-// 👆👆 FIM DA CORREÇÃO 👆👆
+
+// 👇 SEU NÚMERO PARA RECEBER OS FEEDBACKS (Dedo Duro Ativado 🚨)
+const NUMERO_ADMIN = '5551985013496@c.us'; 
+
+// 🗺️ CONFIGURAÇÃO MAPBOX
+const MAPBOX_ACCESS_TOKEN = process.env.MAPBOX_ACCESS_TOKEN; 
+const COORD_COZINHA = "-51.11161606538164,-30.109913348576296"; // Rua Guaíba, 10
+
+// 💳 CONFIGURAÇÃO MERCADO PAGO
+const client = new MercadoPagoConfig({
+  accessToken: process.env.MP_ACCESS_TOKEN || 'SEU_TOKEN_MP_AQUI'
+});
 
 // 🧠 MEMÓRIA DO SISTEMA
 const clientes = {};
 
-// ⚙️ GESTÃO DE ESTADOS DO CLIENTE
+// ----------------------------------------------------------------------
+// 🔄 GESTÃO DE ESTADOS DO CLIENTE
+// ----------------------------------------------------------------------
 const estadoClientes = {
   getEstado: (numero) => {
     if (!clientes[numero]) {
@@ -62,16 +77,10 @@ setInterval(() => {
   }
 }, 60000);
 
-// 💳 CONFIGURAÇÃO MERCADO PAGO
-const client = new MercadoPagoConfig({
-  accessToken: process.env.MP_ACCESS_TOKEN || 'SEU_TOKEN_MP_AQUI'
-});
 
-// 🗺️ CONFIGURAÇÃO MAPBOX
-const MAPBOX_ACCESS_TOKEN = process.env.MAPBOX_ACCESS_TOKEN; 
-const COORD_COZINHA = "-51.11161606538164,-30.109913348576296"; // Rua Guaíba, 10
-
+// ----------------------------------------------------------------------
 // 🚚 MOTOR DE FRETE (VERSÃO FINAL: HÍBRIDO + PREÇO AJUSTADO)
+// ----------------------------------------------------------------------
 async function calcularFreteGoogle(cepDestino) {
   console.log(`🔎 [DEBUG] Iniciando cálculo para o CEP: ${cepDestino}`);
   
@@ -129,7 +138,7 @@ async function calcularFreteGoogle(cepDestino) {
 
     // Até 3km -> R$ 5,00
     if (distanciaKm <= 3.0) { 
-        valor = 1.00; 
+        valor = 5.00; 
         texto = "R$ 5,00"; 
     } 
     // De 3km até 8km -> R$ 10,00
@@ -160,7 +169,10 @@ async function calcularFreteGoogle(cepDestino) {
     return { valor: 15.00, texto: "R$ 15,00 (Contingência)", endereco: "Endereço via CEP" };
   }
 }
+
+// ----------------------------------------------------------------------
 // 💰 PROCESSAMENTO DE PAGAMENTOS
+// ----------------------------------------------------------------------
 async function gerarPix(valor, clienteNome, clienteTelefone) {
   try {
     const payment = new Payment(client);
@@ -214,9 +226,9 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
         items: items,
         external_reference: String(clienteTelefone).replace(/\D/g, ''),
         back_urls: {
-          success: "https://wa.me/5551985013496?text=Oi!%20Já%20concluí%20meu%20pagamento!%20🍱",
-          failure: "https://wa.me/5551985013496?text=Tive%20um%20problema%20no%20pagamento.",
-          pending: "https://wa.me/5551985013496"
+          success: `https://wa.me/${NUMERO_ADMIN.replace('@c.us','')}?text=Oi!%20Já%20concluí%20meu%20pagamento!%20🍱`,
+          failure: `https://wa.me/${NUMERO_ADMIN.replace('@c.us','')}?text=Tive%20um%20problema%20no%20pagamento.`,
+          pending: `https://wa.me/${NUMERO_ADMIN.replace('@c.us','')}`
         },
         auto_return: "approved"
       }
@@ -229,7 +241,9 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
   }
 }
 
+// ----------------------------------------------------------------------
 // 🔔 RECEBIMENTO E CONFIRMAÇÃO (WEBHOOK)
+// ----------------------------------------------------------------------
 app.post('/webhook', async (req, res) => {
   const { action, data } = req.body;
 
@@ -291,7 +305,7 @@ TOTAL PAGO:         R$ ${valorPago.toFixed(2)}
 
               await enviarMensagemWA(numeroCliente, cupomCliente);
               await enviarMensagemWA(numeroCliente, `Muito obrigado, ${memoria.nome}! Seu pedido já foi para a cozinha. 🍱🔥`);
-              await enviarMensagemWA(process.env.NUMERO_ADMIN, msgAdmin);
+              await enviarMensagemWA(NUMERO_ADMIN, msgAdmin); // Usa o número configurado no topo
           }
         }
       } catch (error) { console.error("Erro Webhook:", error); }
@@ -299,10 +313,12 @@ TOTAL PAGO:         R$ ${valorPago.toFixed(2)}
   res.sendStatus(200);
 });
 
+// ----------------------------------------------------------------------
 // 🏠 MENU PRINCIPAL
+// ----------------------------------------------------------------------
 function menuPrincipal(nomeCliente) {
   const nomeDisplay = nomeCliente ? ` ${nomeCliente}` : '';
-  return `🔻 *Menu Principal para${nomeDisplay}*\n\n1️⃣  Ver Cardápio 🍱\n2️⃣  Fazer Pedido 🛒\n3️⃣  Elogios ou Reclamações 💬\n\n_Escolha uma opção digitando o número._`;
+  return `🔻 *Menu Principal para${nomeDisplay}*\n\n1️⃣  Ver Cardápio 🍱\n2️⃣  Fazer Pedido 🛒\n3️⃣  Falar com Atendente (Sugestões/Críticas) 💬\n\n_Escolha uma opção digitando o número._`;
 }
 
 function msgNaoEntendi(textoAnterior) {
@@ -352,7 +368,9 @@ async function enviarMensagemWA(numero, texto) {
   }
 }
 
+// ----------------------------------------------------------------------
 // 🚀 ROTAS DE EXECUÇÃO
+// ----------------------------------------------------------------------
 app.get('/', (req, res) => { 
   res.send('🍱 A Melhor Marmita - Servidor Online 🚀'); 
 });
@@ -389,7 +407,7 @@ app.post('/mensagem', async (req, res) => {
     const isForaDoHorario = (horaAtual < 8 || horaAtual >= 18);
 
     if (isFinalDeSemana || isForaDoHorario) {
-        if (numero !== process.env.NUMERO_ADMIN) {
+        if (numero !== process.env.NUMERO_ADMIN && numero !== NUMERO_ADMIN.replace('@c.us', '')) {
             const avisoFechado = `🍱 *Olá! A Melhor Marmita agradece seu contato.*\n\n🚫 No momento estamos *FECHADOS*.\n\n⏰ Horário: Seg a Sex, das 08h às 18h.\n\nResponderemos assim que iniciarmos nosso expediente! 👋`;
             await enviarMensagemWA(numero, avisoFechado);
             return res.status(200).json({ ok: true });
@@ -446,8 +464,9 @@ if (cliente.estado === 'MENU') {
         return res.status(200).json({ok:true}); 
     }
 
+    // AJUSTE SOLICITADO: Promoção em destaque, peso em baixo
     let cardapio = `🍱 *Cardápio do Dia para ${cliente.nome}*\n` +
-                  `🔥 *PROMOÇÃO:* Acima de 5 unid o preço *CAI* de ~~R$ 199,99~~ para *R$ 17,49/un*!\n` +
+                  `🔥 *PROMOÇÃO:* Acima de 5 unid o preço *CAI* para *R$ 17,49/un*!\n` +
                   `⚖️ Peso: 400g por marmita\n\n`;
     
     dados.forEach(item => { cardapio += `🔹 ${item.PRATO} – R$ 19,99\n`; });
@@ -472,9 +491,10 @@ if (cliente.estado === 'MENU') {
     return res.status(200).json({ ok: true });
   }
 
+  // 👇 OPÇÃO 3 (FEEDBACK / FALAR COM ATENDENTE)
   if (mensagem === '3') { 
     cliente.estado = 'ELOGIOS';
-    await enviarMensagemWA(numero, `💬 *Espaço do Cliente*\n${cliente.nome}, escreva abaixo seu elogio, sugestão ou reclamação:\n\n(Digite 0 para voltar)`); 
+    await enviarMensagemWA(numero, `💬 *Fale com o Atendente*\n\n${cliente.nome}, escreva abaixo sua mensagem, elogio, crítica ou sugestão.\n\nEu vou enviar *diretamente para o dono* ler agora mesmo! 👇\n\n(Digite 0 para cancelar e voltar)`); 
     return res.status(200).json({ ok: true });
   }
 
@@ -765,7 +785,7 @@ if (cliente.estado === 'ESCOLHENDO_PAGAMENTO' || cliente.estado === 'AGUARDANDO_
   return res.status(200).json({ ok: true });
 }
 
-// 🏁 STATUS FINAL E FEEDBACK
+// 🏁 STATUS FINAL E FEEDBACK (COM ENVIO PRO DONO)
 if (cliente.estado === 'FINALIZADO') {
    if (mensagem === 'menu' || mensagem === '0') {
        estadoClientes.resetarCliente(numero);
@@ -776,9 +796,26 @@ if (cliente.estado === 'FINALIZADO') {
    return res.status(200).json({ ok: true });
 }
 
+// 👇 LÓGICA DO DEDO DURO (Aqui o bot manda a mensagem pra você!)
 if (cliente.estado === 'ELOGIOS') {
+  
+  if (mensagem === '0') {
+      cliente.estado = 'MENU';
+      await enviarMensagemWA(numero, menuPrincipal(cliente.nome));
+      return res.status(200).json({ ok: true });
+  }
+
+  // 1. Avisa o Admin (VOCÊ)
+  const alertaAdmin = `🚨 *NOVO FEEDBACK/CONTATO* 🚨\n\n` +
+                      `👤 *Nome:* ${cliente.nome}\n` +
+                      `📱 *Tel:* ${numero}\n` +
+                      `💬 *Mensagem:* ${texto}`;
+  
+  await enviarMensagemWA(NUMERO_ADMIN, alertaAdmin);
+
+  // 2. Responde o Cliente
   cliente.estado = 'MENU';
-  await enviarMensagemWA(numero, `✅ Obrigado! Seu feedback foi registrado. Se necessário, um atendente, entrará em contato. \n\n` + menuPrincipal(cliente.nome));
+  await enviarMensagemWA(numero, `✅ Mensagem enviada! Muito obrigado pelo contato, ${cliente.nome}. Logo responderemos.\n\n` + menuPrincipal(cliente.nome));
   return res.status(200).json({ ok: true });
 }
 
