@@ -1,18 +1,10 @@
 const express = require('express');
-const xlsx = require('xlsx');
 const path = require('path');
 const axios = require('axios');
 const { MercadoPagoConfig, Payment, Preference } = require('mercadopago');
 
 // 🧠 MEMÓRIA DO SISTEMA
 const clientes = {};
-
-// 🛡️ CONTROLE DE SEGURANÇA E COTAS
-const CONTROLE_MAPS = {
-  dia: new Date().getDate(),
-  consultas: 0,
-  LIMITE_DIARIO: 50 
-};
 
 // ⚙️ GESTÃO DE ESTADOS DO CLIENTE
 const estadoClientes = {
@@ -50,103 +42,77 @@ const estadoClientes = {
   }
 };
 
-// 🧹 MANUTENÇÃO DO SISTEMA E COTAS
+// 🧹 MANUTENÇÃO: Limpa sessões inativas após 10 minutos
 setInterval(() => {
   const agora = Date.now();
-  const tempoLimite = 12 * 60 * 60 * 1000;
-  
-  const diaHoje = new Date().getDate();
-  if (CONTROLE_MAPS.dia !== diaHoje) {
-      console.log('🔄 Novo dia: Resetando contador do Google Maps.');
-      CONTROLE_MAPS.dia = diaHoje;
-      CONTROLE_MAPS.consultas = 0;
-  }
-
-  Object.keys(clientes).forEach(numero => {
-    const cliente = clientes[numero];
-    if ((agora - cliente.ultimoContato) > tempoLimite && cliente.estado !== 'FINALIZADO') {
-        delete clientes[numero];
+  for (const numero in clientes) {
+    if (agora - clientes[numero].ultimoContato > 10 * 60 * 1000) {
+      delete clientes[numero];
     }
-  });
-}, 60 * 60 * 1000); 
+  }
+}, 60000);
 
-// 🚀 INICIALIZAÇÃO DO SERVIDOR EXPRESS
-const app = express();
-const PORT = process.env.PORT || 3000;
+// 💳 CONFIGURAÇÃO MERCADO PAGO
+const client = new MercadoPagoConfig({
+  accessToken: process.env.MP_ACCESS_TOKEN || 'SEU_TOKEN_MP_AQUI'
+});
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+// 🗺️ CONFIGURAÇÃO MAPBOX (Substituindo o Google)
+const MAPBOX_ACCESS_TOKEN = process.env.MAPBOX_ACCESS_TOKEN; 
+const COORD_COZINHA = "-51.130867,-30.111452"; // Longitude, Latitude da Rua Guaíba, 10
 
-// ⚙️ CONFIGURAÇÕES DO SISTEMA
-const NUMERO_ADMIN = process.env.NUMERO_ADMIN;
-const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN; 
-const WASENDER_TOKEN = process.env.WASENDER_TOKEN; 
-const URL_DO_SEU_SITE = 'https://mmmelhormarmita.onrender.com';
-const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY; 
-const ORIGEM_COZINHA = process.env.ORIGEM_COZINHA;
-
-// ⏱️ GESTÃO DE TIMERS E PAGAMENTO
-const TEMPO_INATIVO = 10 * 60 * 1000; 
-const timersClientes = {};
-const client = new MercadoPagoConfig({ accessToken: MP_ACCESS_TOKEN, options: { timeout: 5000 } });
-
-// 🗺️ CÁLCULO DE FRETE AUTOMÁTICO
+// 🚚 MOTOR DE FRETE (Mapbox + Contingência)
 async function calcularFreteGoogle(cepDestino) {
   try {
-    if (CONTROLE_MAPS.consultas >= CONTROLE_MAPS.LIMITE_DIARIO) {
-        return { erro: true, msg: "⚠️ O sistema automático de frete está indisponível. Envie seu endereço por escrito." };
-    }
-
     const cepLimpo = String(cepDestino).replace(/\D/g, '');
     if (cepLimpo.length !== 8) return { erro: true, msg: "⚠️ CEP inválido. Digite os 8 números." };
 
-    const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(ORIGEM_COZINHA)}&destinations=cep+${cepLimpo}&mode=driving&language=pt-BR&key=${GOOGLE_API_KEY}`;
+    // 1. Geocoding: Localiza o endereço e as coordenadas pelo CEP
+    const urlGeo = `https://api.mapbox.com/geocoding/v5/mapbox.places/${cepLimpo}.json?country=br&access_token=${MAPBOX_ACCESS_TOKEN}`;
+    const geoRes = await axios.get(urlGeo);
     
-    // 🔍 LOG DE DEBUG: Para você ver a URL no terminal se precisar testar no navegador
-    console.log(`🔗 Consultando Google: ${url}`);
-    
-    const response = await axios.get(url);
-    const data = response.data;
-
-    // Verifica se a chave ou a conta do Google tem algum problema
-    if (data.status !== 'OK') {
-        console.error("❌ Erro na API do Google:", data.error_message || data.status);
-        return { erro: true, msg: `❌ Erro na localização (${data.status}). Verifique o CEP.` };
+    if (!geoRes.data.features || geoRes.data.features.length === 0) {
+        return { erro: true, msg: "❌ Endereço não localizado pelo CEP." };
     }
 
-    const elemento = data.rows[0].elements[0];
+    const destino = geoRes.data.features[0];
+    const coordsDestino = destino.center.join(','); // Formato Long,Lat
+    const enderecoFormatado = destino.place_name;
+
+    // 2. Directions: Calcula a distância real por rota de carro
+    const urlDist = `https://api.mapbox.com/directions/v5/mapbox/driving/${COORD_COZINHA};${coordsDestino}?access_token=${MAPBOX_ACCESS_TOKEN}`;
+    const distRes = await axios.get(urlDist);
+
+    if (!distRes.data.routes || distRes.data.routes.length === 0) {
+        return { erro: true, msg: "🚫 Não foi possível traçar uma rota para este local." };
+    }
+
+    const distanciaKm = distRes.data.routes[0].distance / 1000;
+    console.log(`📏 Frete: ${distanciaKm.toFixed(2)}km para ${enderecoFormatado}`);
+
+    // 3. Tabela de Preços (Conforme faixas do negócio)
+    let valor = 15.00;
+    let texto = "R$ 15,00";
+
+    if (distanciaKm <= 2.0) { valor = 5.00; texto = "R$ 5,00"; }
+    else if (distanciaKm <= 5.0) { valor = 8.00; texto = "R$ 8,00"; }
+    else if (distanciaKm <= 10.0) { valor = 12.00; texto = "R$ 12,00"; }
     
-    // Verifica se o CEP existe mas não tem rota de carro até ele
-    if (elemento.status === 'ZERO_RESULTS' || elemento.status === 'NOT_FOUND') {
-        console.warn(`⚠️ CEP ${cepLimpo} localizado, mas sem rota encontrada.`);
-        return { erro: true, msg: "❌ Não encontramos rota para este CEP. Verifique se ele é da nossa região." };
-    }
+    if (distanciaKm > 20.0) return { erro: true, msg: "🚫 Endereço fora da área de entrega (limite 20km)." };
 
-    if (elemento.status !== 'OK') {
-        console.error("❌ Status do elemento Google:", elemento.status);
-        return { erro: true, msg: "🚫 Erro ao calcular distância. Tente novamente." };
-    }
+    return { valor, texto, endereco: enderecoFormatado };
 
-    // Só conta a consulta se deu tudo certo
-    CONTROLE_MAPS.consultas++;
-
-    const distanciaKm = elemento.distance.value / 1000;
-    const enderecoGoogle = data.destination_addresses[0]; 
-
-    console.log(`📏 Sucesso! Distância: ${distanciaKm.toFixed(2)}km para ${enderecoGoogle}`);
-
-    // Ajuste de valores (Corrigi o de 2km para R$ 5,00)
-    if (distanciaKm <= 2.0) return { valor: 5.00, texto: "R$ 5,00", endereco: enderecoGoogle };
-    if (distanciaKm <= 5.0) return { valor: 8.00, texto: "R$ 8,00", endereco: enderecoGoogle };
-    if (distanciaKm <= 10.0) return { valor: 15.00, texto: "R$ 15,00", endereco: enderecoGoogle };
-    if (distanciaKm <= 20.0) return { valor: 20.00, texto: "R$ 20,00", endereco: enderecoGoogle };
-
-    return { erro: true, msg: "🚫 Endereço fora da área de entrega (limite 20km)." };
   } catch (error) {
-    console.error("⚠️ Erro Crítico no Frete:", error.message);
-    return { erro: true, msg: "⚠️ Erro técnico no cálculo de frete." };
+    console.error("⚠️ Erro Crítico Mapbox:", error.message);
+    // Contingência: Caso a API falhe, permite seguir com frete fixo para não perder a venda
+    return { 
+        valor: 8.00, 
+        texto: "R$ 8,00 (Taxa fixa)", 
+        endereco: "Endereço a confirmar no próximo passo" 
+    };
   }
 }
+
 // 💰 PROCESSAMENTO DE PAGAMENTOS
 async function gerarPix(valor, clienteNome, clienteTelefone) {
   try {
