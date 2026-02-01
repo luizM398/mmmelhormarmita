@@ -69,7 +69,7 @@ const client = new MercadoPagoConfig({
 
 // 🗺️ CONFIGURAÇÃO MAPBOX
 const MAPBOX_ACCESS_TOKEN = process.env.MAPBOX_ACCESS_TOKEN; 
-const COORD_COZINHA = "-51.130867,-30.111452"; // Rua Guaíba, 10
+const COORD_COZINHA = "-51.11161606538164,-30.109913348576296"; // Rua Guaíba, 10
 
 // 🚚 MOTOR DE FRETE (HÍBRIDO: VIACEP + MAPBOX)
 async function calcularFreteGoogle(cepDestino) {
