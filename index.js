@@ -111,7 +111,7 @@ async function calcularFreteGoogle(cepDestino) {
     const distanciaKm = elemento.distance.value / 1000;
     const enderecoGoogle = data.destination_addresses[0]; 
 
-    if (distanciaKm <= 2.0) return { valor: 5.00, texto: "R$ 5,00", endereco: enderecoGoogle };
+    if (distanciaKm <= 2.0) return { valor: 1.00, texto: "R$ 5,00", endereco: enderecoGoogle };
     if (distanciaKm <= 5.0) return { valor: 8.00, texto: "R$ 8,00", endereco: enderecoGoogle };
     if (distanciaKm <= 10.0) return { valor: 15.00, texto: "R$ 15,00", endereco: enderecoGoogle };
     if (distanciaKm <= 20.0) return { valor: 20.00, texto: "R$ 20,00", endereco: enderecoGoogle };
@@ -152,7 +152,7 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
     const items = itens.map(item => ({
       title: item.prato,
       quantity: Number(item.quantidade),
-      unit_price: Number(item.quantidade >= 5 ? 17.49 : 19.99),
+      unit_price: Number(item.quantidade >= 5 ? 0.01 : 19.99),
       currency_id: 'BRL'
     }));
 
@@ -219,7 +219,7 @@ app.post('/webhook', async (req, res) => {
                      nomeExibicao = nomeExibicao.replace(/strogonoff/gi, 'strogonoff LIGHT');
                  }
 
-                 const precoItem = item.quantidade >= 5 ? 17.49 : 19.99;
+                 const precoItem = item.quantidade >= 5 ? 0.01 : 19.99;
                  const totalItem = item.quantidade * precoItem;
                  subtotalVal += totalItem;
 
@@ -624,7 +624,7 @@ if (cliente.estado === 'ADICIONAR_OUTRO') {
     let msgPromo = "";
 
     if (totalMarmitas >= 5) {
-      valorUnitario = 17.49;
+      valorUnitario = 0.01;
       textoPreco = "R$ 17,49 (Promoção)"; 
       msgPromo = "🎉 *PROMOÇÃO APLICADA!* (Acima de 5 un)\n";
     }
@@ -662,7 +662,7 @@ if (cliente.estado === 'AGUARDANDO_CEP') {
     cliente.endereco = `CEP: ${texto} (${frete.endereco})`; 
     
     const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
-    const valorUnitario = totalMarmitas >= 5 ? 17.49 : 19.99;
+    const valorUnitario = totalMarmitas >= 5 ? 0.01 : 19.99;
     const subtotalMarmitas = totalMarmitas * valorUnitario;
 
     const totalComFrete = subtotalMarmitas + frete.valor;
