@@ -75,7 +75,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ⚙️ CONFIGURAÇÕES DO SISTEMA
-const NUMERO_ADMIN = '5551984050946'; 
+const NUMERO_ADMIN = '5551985013496'; 
 const MP_ACCESS_TOKEN = 'APP_USR-3976540518966482-012110-64c2873d7929c168846b389d4f6c311e-281673709'; 
 const WASENDER_TOKEN = process.env.WASENDER_TOKEN || '399f73920f6d3300e39fc9f8f0e34eb40510a8a14847e288580d5d10e40cdae4'; 
 const URL_DO_SEU_SITE = 'https://mmmelhormarmita.onrender.com';
@@ -170,9 +170,9 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
         items: items,
         external_reference: String(clienteTelefone),
         back_urls: {
-          success: "https://www.google.com",
-          failure: "https://www.google.com",
-          pending: "https://www.google.com"
+          success: "https://wa.me/5551984050946?text=Oi!%20Já%20concluí%20meu%20pagamento%20pelo%20cartão!%20🍱",
+          failure: "https://wa.me/5551984050946?text=Ops...%20Tive%20um%20problema%20no%20pagamento.%20Pode%20me%20ajudar?",
+          pending: "https://wa.me/5551984050946"
         }
       }
     });
