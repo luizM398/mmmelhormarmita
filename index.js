@@ -360,6 +360,7 @@ app.post('/mensagem', async (req, res) => {
     console.log(`📩 Cliente ${numero} (${cliente.estado}): "${mensagem}"`);
 
 // 👋 SAUDAÇÃO INICIAL
+// 👋 SAUDAÇÃO INICIAL
 if (!cliente.recebeuSaudacao) {
   cliente.recebeuSaudacao = true;
   cliente.estado = 'PERGUNTANDO_NOME_INICIO';
@@ -383,7 +384,7 @@ if (cliente.estado === 'PERGUNTANDO_NOME_INICIO') {
     return res.status(200).json({ ok: true });
 }
 
-// 📋 NAVEGAÇÃO DO MENU
+// 📋 NAVEGAÇÃO DO MENU PRINCIPAL
 if (cliente.estado === 'MENU') {
   if (mensagem === '1') { 
     const dados = carregarMenu();
@@ -392,7 +393,10 @@ if (cliente.estado === 'MENU') {
         return res.status(200).json({ok:true}); 
     }
 
-    let cardapio = `🍱 *Cardápio do Dia para ${cliente.nome}*\n🔥 *PROMOÇÃO:* Acima de 5 unid o preço *CAI* de ~~19,99~~ para *R$ 17,49/un*!\n\n`;
+    let cardapio = `🍱 *Cardápio do Dia para ${cliente.nome}*\n` +
+                   `⚖️ *Peso: 400g por marmita*\n` +
+                   `🔥 *PROMOÇÃO:* Acima de 5 unid o preço *CAI* para *R$ 17,49/un*!\n\n`;
+    
     dados.forEach(item => { cardapio += `🔹 ${item.PRATO} – R$ 19,99\n`; });
     cardapio += `\nPara fazer seu pedido, digite *2*.\nOu digite *0* para voltar.`;
     
@@ -473,8 +477,15 @@ if (cliente.estado === 'ESCOLHENDO_PRATO') {
   const nomePrato = prato.PRATO.toLowerCase();
   let proximaResposta = '';
   
-  // Adiciona o item ao carrinho (quantidade começa em 0 para ser definida no próximo passo)
-  cliente.pedido.push({ prato: prato.PRATO, valor: 19.99, arroz: null, strogonoff: null, quantidade: 0 });
+  // Inicia o item no pedido
+  cliente.pedido.push({ 
+      prato: prato.PRATO, 
+      valor: 19.99, 
+      arroz: null, 
+      strogonoff: null, 
+      quantidade: 0,
+      peso: "400g" 
+  });
   
   cliente.precisaArroz = nomePrato.includes('arroz');
   cliente.precisaStrogonoff = nomePrato.includes('strogonoff');
@@ -487,7 +498,7 @@ if (cliente.estado === 'ESCOLHENDO_PRATO') {
     proximaResposta = `🍛 *Qual tipo de strogonoff?*\n\n1️⃣ Tradicional\n2️⃣ Light`;
   } else {
     cliente.estado = 'QUANTIDADE';
-    proximaResposta = `🔢 *Quantas marmitas deste prato deseja?*`;
+    proximaResposta = `🔢 *Quantas marmitas (400g) deste prato deseja?*`;
   }
 
   cliente.ultimaMensagem = proximaResposta;
