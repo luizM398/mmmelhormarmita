@@ -245,9 +245,10 @@ TOTAL PAGO:         R$ ${valorPago.toFixed(2)}
 });
 
 // 🧠 LÓGICA DE INTERAÇÃO
+// 🏠 MENU PRINCIPAL
 function menuPrincipal(nomeCliente) {
   const nomeDisplay = nomeCliente ? ` ${nomeCliente}` : '';
-  return `🔻 *Menu Principal para${nomeDisplay}*\n\n1️⃣  Ver Cardápio do Dia\n2️⃣  Fazer Pedido\n3️⃣  Elogios ou Reclamações\n\n_Digite o número da opção desejada._`;
+  return `🔻 *Menu Principal para${nomeDisplay}*\n\n1️⃣  Ver Cardápio (400g) 🍱\n2️⃣  Fazer Pedido 🛒\n3️⃣  Elogios ou Reclamações 💬\n\n_Escolha uma opção digitando o número._`;
 }
 
 function msgNaoEntendi(textoAnterior) {
@@ -262,35 +263,38 @@ function carregarMenu() {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     return xlsx.utils.sheet_to_json(sheet);
   } catch (error) { 
+    console.error("Erro ao carregar menu.xlsx:", error.message);
     return []; 
   }
 }
 
-// ⏱️ CONTROLE DE INATIVIDADE
+// ⏱️ CONTROLE DE INATIVIDADE (Timer)
+const timersClientes = {};
+const TEMPO_INATIVO = 20 * 60 * 1000; // 20 minutos
+
 function iniciarTimerInatividade(numero) {
   if (timersClientes[numero]) clearTimeout(timersClientes[numero]);
   
   timersClientes[numero] = setTimeout(async () => {
     const cliente = estadoClientes.getEstado(numero);
-    
     if (cliente.estado !== 'INICIAL' && cliente.estado !== 'MENU' && cliente.estado !== 'FINALIZADO') {
       estadoClientes.resetarCliente(numero); 
-      await enviarMensagemWA(numero, `💤 *Atendimento encerrado por falta de interação.*`);
+      await enviarMensagemWA(numero, `💤 *Atendimento encerrado por inatividade.* Para recomeçar, basta dizer "Oi".`);
     }
     delete timersClientes[numero];
   }, TEMPO_INATIVO);
 }
 
-// 📲 INTEGRAÇÃO WHATSAPP (API)
+// 📲 INTEGRAÇÃO WHATSAPP (Wasender)
 async function enviarMensagemWA(numero, texto) {
   const numeroLimpo = String(numero).replace(/\D/g, '');
   try {
     await axios.post('https://www.wasenderapi.com/api/send-message', 
       { to: numeroLimpo, text: texto }, 
-      { headers: { Authorization: `Bearer ${WASENDER_TOKEN}`, 'Content-Type': 'application/json' } }
+      { headers: { Authorization: `Bearer ${process.env.WASENDER_TOKEN}`, 'Content-Type': 'application/json' } }
     );
   } catch (err) { 
-    console.error(`Erro envio msg:`, err.message); 
+    console.error(`Erro envio msg para ${numeroLimpo}:`, err.message); 
   }
 }
 
@@ -310,19 +314,19 @@ app.post('/mensagem', async (req, res) => {
     const remoteJid = dadosMensagem.key?.remoteJid || "";
     const fromMe = dadosMensagem.key?.fromMe;
     
-    // 🛡️ FILTRO DE SEGURANÇA
+    // 🛡️ SEGURANÇA: Não responde grupos ou o próprio bot
     if (remoteJid.includes('status') || remoteJid.includes('@g.us') || fromMe === true) {
         return res.status(200).json({ ok: true });
     }
 
     let numeroRaw = dadosMensagem.key?.cleanedSenderPn || dadosMensagem.key?.senderPn || remoteJid;
     const numero = String(numeroRaw).split('@')[0].replace(/\D/g, '');
-    const texto = dadosMensagem.messageBody || dadosMensagem.message?.conversation || dadosMensagem.message?.extendedTextMessage?.text || "";
+    const texto = (dadosMensagem.messageBody || "").trim();
 
     if (!texto || !numero) return res.status(200).json({ ok: true });
-    const mensagem = texto.trim().toLowerCase();
+    const mensagem = texto.toLowerCase();
     
-    // ⏰ CONTROLE DE HORÁRIO
+    // ⏰ CONTROLE DE HORÁRIO (08h às 18h)
     const dataBrasil = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     const diaSemana = dataBrasil.getDay(); 
     const horaAtual = dataBrasil.getHours();
@@ -331,41 +335,29 @@ app.post('/mensagem', async (req, res) => {
     const isForaDoHorario = (horaAtual < 8 || horaAtual >= 18);
 
     if (isFinalDeSemana || isForaDoHorario) {
-        if (numero !== NUMERO_ADMIN) {
-            const avisoFechado = `🍱 *Olá! A Melhor Marmita agradece seu contato.*\n\n` +
-                                 `🚫 No momento estamos *FECHADOS*.\n\n` +
-                                 `⏰ *Nosso horário de atendimento:*\n` +
-                                 `🗓️ Segunda a Sexta\n` +
-                                 `🕒 Das 08h às 18h\n\n` +
-                                 `Sua mensagem foi recebida e responderemos assim que iniciarmos nosso expediente! 👋`;
-
+        if (numero !== process.env.NUMERO_ADMIN) {
+            const avisoFechado = `🍱 *Olá! A Melhor Marmita agradece seu contato.*\n\n🚫 No momento estamos *FECHADOS*.\n\n⏰ Horário: Seg a Sex, das 08h às 18h.\n\nResponderemos assim que iniciarmos nosso expediente! 👋`;
             await enviarMensagemWA(numero, avisoFechado);
             return res.status(200).json({ ok: true });
         }
     }
 
-    // 🧠 GESTÃO DE MEMÓRIA E COMANDO GLOBAL
-    const memoria = estadoClientes.getEstado(numero);
+    const cliente = estadoClientes.getEstado(numero);
     iniciarTimerInatividade(numero);
-    memoria.ultimoContato = Date.now();
+    cliente.ultimoContato = Date.now();
 
-    // 🚩 LÓGICA DE CANCELAMENTO (Resolve o bug do "Já Pago")
+    // 🚩 CANCELAMENTO GLOBAL
     if (mensagem === 'cancelar' || mensagem === 'desistir') {
-        if (memoria.pagamentoConfirmado === true) {
-            await enviarMensagemWA(numero, "❌ *Pedido em produção!*\nSeu pagamento já foi confirmado e o pedido enviado para a cozinha. Para alterações, fale com o suporte.");
+        if (cliente.pagamentoConfirmado) {
+            await enviarMensagemWA(numero, "❌ *Pedido em produção!* O pagamento já foi aprovado. Para alterações, fale com o suporte.");
         } else {
             estadoClientes.resetarCliente(numero);
-            await enviarMensagemWA(numero, "✅ *Pedido cancelado com sucesso!*\nSua lista foi limpa. Se quiser começar de novo, basta digitar 'Oi'.");
+            await enviarMensagemWA(numero, "✅ *Pedido cancelado!* Sua lista foi limpa.");
         }
         return res.status(200).json({ ok: true });
     }
 
-// ⚙️ PROCESSAMENTO DO CLIENTE
-const cliente = estadoClientes.getEstado(numero);
-cliente.ultimoContato = Date.now();
-iniciarTimerInatividade(numero);
-
-console.log(`📩 Cliente ${numero}: "${mensagem}"`);
+    console.log(`📩 Cliente ${numero} (${cliente.estado}): "${mensagem}"`);
 
 // 👋 SAUDAÇÃO INICIAL
 if (!cliente.recebeuSaudacao) {
