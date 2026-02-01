@@ -123,21 +123,94 @@ async function calcularFreteGoogle(cepDestino) {
     const distanciaKm = distRes.data.routes[0].distance / 1000;
     console.log(`📏 [DEBUG] Distância Final: ${distanciaKm.toFixed(2)} km`);
 
-    // TABELA DE PREÇOS (MODO TESTE: R$ 1,00)
-    let valor = 15.00;
-    let texto = "R$ 15,00";
+  // 🚚 MOTOR DE FRETE (VERSÃO FINAL: HÍBRIDO + PREÇO AJUSTADO)
+async function calcularFreteGoogle(cepDestino) {
+  console.log(`🔎 [DEBUG] Iniciando cálculo para o CEP: ${cepDestino}`);
+  
+  if (!MAPBOX_ACCESS_TOKEN) {
+      return { erro: true, msg: "Erro interno (Token Mapbox ausente)." };
+  }
 
-    if (distanciaKm <= 2.0) { valor = 1.00; texto = "R$ 1,00 (Teste)"; }
-    else if (distanciaKm <= 5.0) { valor = 8.00; texto = "R$ 8,00"; }
-    else if (distanciaKm <= 10.0) { valor = 12.00; texto = "R$ 12,00"; }
+  try {
+    // 1. LIMPEZA DO CEP
+    const cepLimpo = String(cepDestino).replace(/\D/g, '');
+    if (cepLimpo.length !== 8) return { erro: true, msg: "⚠️ CEP inválido. Digite os 8 números." };
+
+    // 2. CONSULTA O VIACEP (Para garantir o nome da rua correto)
+    console.log("🇧🇷 [DEBUG] Consultando ViaCEP...");
+    const urlViaCep = `https://viacep.com.br/ws/${cepLimpo}/json/`;
+    const viaCepRes = await axios.get(urlViaCep);
+
+    if (viaCepRes.data.erro) {
+        console.log("❌ [DEBUG] ViaCEP não encontrou este CEP.");
+        return { erro: true, msg: "❌ CEP não encontrado na base dos Correios." };
+    }
+
+    // Monta o endereço: "Rua X, Porto Alegre, RS, Brasil"
+    const enderecoTexto = `${viaCepRes.data.logradouro}, ${viaCepRes.data.localidade}, ${viaCepRes.data.uf}, Brasil`;
+    console.log(`✅ [DEBUG] Endereço descoberto: ${enderecoTexto}`);
+
+    // 3. MAPBOX GEOCODING (Com preferência para perto da sua cozinha)
+    // &proximity=${COORD_COZINHA} é o segredo para não pegar rua com mesmo nome longe!
+    const urlGeo = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(enderecoTexto)}.json?country=br&limit=1&proximity=${COORD_COZINHA}&access_token=${MAPBOX_ACCESS_TOKEN}`;
+    const geoRes = await axios.get(urlGeo);
     
-    if (distanciaKm > 20.0) return { erro: true, msg: "🚫 Fora da área de entrega (limite 20km)." };
+    if (!geoRes.data.features || geoRes.data.features.length === 0) {
+        return { erro: true, msg: "❌ O mapa não conseguiu localizar a rua informada." };
+    }
+
+    const destino = geoRes.data.features[0];
+    const coordsDestino = destino.center.join(','); // Longitude,Latitude
+    
+    // 4. CÁLCULO DA ROTA (Directions)
+    console.log("🚗 [DEBUG] Calculando rota exata...");
+    const urlDist = `https://api.mapbox.com/directions/v5/mapbox/driving/${COORD_COZINHA};${coordsDestino}?access_token=${MAPBOX_ACCESS_TOKEN}`;
+    const distRes = await axios.get(urlDist);
+
+    if (!distRes.data.routes || distRes.data.routes.length === 0) {
+        return { erro: true, msg: "🚫 Rota não encontrada." };
+    }
+
+    const distanciaKm = distRes.data.routes[0].distance / 1000;
+    console.log(`📏 [DEBUG] Distância Final: ${distanciaKm.toFixed(2)} km`);
+
+    // ---------------------------------------------------------
+    // 💰 TABELA DE PREÇOS OFICIAL
+    // ---------------------------------------------------------
+    let valor = 0;
+    let texto = "";
+
+    // Até 3km -> R$ 5,00
+    if (distanciaKm <= 3.0) { 
+        valor = 5.00; 
+        texto = "R$ 5,00"; 
+    } 
+    // De 3km até 8km -> R$ 10,00
+    else if (distanciaKm <= 8.0) { 
+        valor = 10.00; 
+        texto = "R$ 10,00"; 
+    }
+    // De 8km até 14km -> R$ 15,00
+    else if (distanciaKm <= 14.0) { 
+        valor = 15.00; 
+        texto = "R$ 15,00"; 
+    }
+    // Acima de 14km (Bela Vista cai aqui) -> R$ 20,00
+    else if (distanciaKm <= 20.0) { 
+        valor = 20.00; 
+        texto = "R$ 20,00"; 
+    }
+    // Acima de 20km -> Não entrega
+    else {
+        return { erro: true, msg: "🚫 Muito distante (fora da área de entrega de 20km)." };
+    }
+    // ---------------------------------------------------------
 
     return { valor, texto, endereco: enderecoTexto };
 
   } catch (error) {
     console.error("🔥 [ERRO]:", error.message);
-    return { valor: 8.00, texto: "R$ 8,00 (Contingência)", endereco: "Endereço via CEP" };
+    return { valor: 15.00, texto: "R$ 15,00 (Contingência)", endereco: "Endereço via CEP" };
   }
 }
 
