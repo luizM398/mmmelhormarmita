@@ -242,7 +242,7 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
 }
 
 // ----------------------------------------------------------------------
-// 🔔 RECEBIMENTO E CONFIRMAÇÃO (WEBHOOK) - VISUAL NOTINHA 32 COLUNAS 📐
+// 🔔 RECEBIMENTO E CONFIRMAÇÃO (WEBHOOK) - VISUAL PERFEITO 📐
 // ----------------------------------------------------------------------
 app.post('/webhook', async (req, res) => {
   const { action, data } = req.body;
@@ -261,9 +261,9 @@ app.post('/webhook', async (req, res) => {
               memoria.pagamentoConfirmado = true;
               memoria.estado = 'FINALIZADO';
               
-              // 📐 CONFIGURAÇÃO DO VISUAL (32 Colunas = Padrão Recibo)
-              const TAMANHO_CUPOM = 32; 
-              const SEPARADOR = '-'.repeat(TAMANHO_CUPOM); 
+              // 📐 CONFIGURAÇÃO DO PAPEL (30 Colunas)
+              const LARGURA_PAPEL = 30; 
+              const SEPARADOR = '-'.repeat(LARGURA_PAPEL); 
 
               let resumoItens = "";     
               let resumoItensAdmin = ""; 
@@ -272,58 +272,55 @@ app.post('/webhook', async (req, res) => {
               memoria.pedido.forEach(item => {
                 let nomeExibicao = item.prato;
 
-                // 1. Aplica as variações no texto
+                // 1. Tratamento de Texto
                 if (item.arroz === 'Integral') nomeExibicao = nomeExibicao.replace(/arroz/gi, 'Arroz Integral');
                 if (item.strogonoff === 'Light') nomeExibicao = nomeExibicao.replace(/strogonoff/gi, 'Strogonoff Light');
                 
-                // 2. QUEBRAS DE LINHA ESTRATÉGICAS ✂️
-                // Quebra na vírgula e no " e "
+                // Quebras de linha estéticas
                 nomeExibicao = nomeExibicao.replace(/,/g, ',\n  '); 
                 nomeExibicao = nomeExibicao.replace(/ e /g, '\n  e ');
-                
-                // 🔥 CORREÇÃO ESPECÍFICA DO ESCONDIDINHO
-                // Transforma "Escondidinho de carne..." em duas linhas
-                nomeExibicao = nomeExibicao.replace(/Escondidinho de/gi, 'Escondidinho de\n  ');
-
                 nomeExibicao = nomeExibicao.charAt(0).toUpperCase() + nomeExibicao.slice(1);
 
-                // Define preço
+                // Cálculo de Valores
                 const precoItem = memoria.totalMarmitas >= 5 ? 0.01 : 19.99;
                 const totalItem = item.quantidade * precoItem;
                 subtotalVal += totalItem;
 
-                // 3. Monta o visual final
+                // 2. Montagem do Item
                 resumoItens += `${item.quantidade}x ${nomeExibicao}\n`;
                 
-                // Preço alinhado EXATAMENTE na direita (Linha de baixo)
+                // ALINHAMENTO DO PREÇO (Empurra pra direita até dar 30 chars)
                 const precoFormatado = `R$ ${totalItem.toFixed(2).replace('.', ',')}`;
-                resumoItens += precoFormatado.padStart(TAMANHO_CUPOM, ' ') + `\n\n`; 
+                resumoItens += precoFormatado.padStart(LARGURA_PAPEL, ' ') + `\n`; 
 
-                // Resumo simples para o ADMIN
+                // Admin
                 resumoItensAdmin += `▪️ ${item.quantidade}x ${item.prato}\n`;
               });
 
               const dataBr = new Date().toLocaleDateString('pt-BR');
               const horaBr = new Date().toLocaleTimeString('pt-BR').substring(0,5);
 
-              // Função auxiliar para alinhar valores totais
-              const alinharValor = (rotulo, valor) => {
+              // 3. FUNÇÃO DE ALINHAMENTO DOS TOTAIS
+              const alinhar = (rotulo, valor) => {
                   const valorStr = `R$ ${valor.toFixed(2).replace('.', ',')}`;
-                  const espacos = TAMANHO_CUPOM - rotulo.length - valorStr.length;
-                  return rotulo + ' '.repeat(Math.max(0, espacos)) + valorStr;
+                  // Calcula quantos espaços vazios precisa no meio
+                  const espacosLivres = LARGURA_PAPEL - rotulo.length - valorStr.length;
+                  const espacos = ' '.repeat(Math.max(0, espacosLivres));
+                  return rotulo + espacos + valorStr;
               };
 
+              // MONTAGEM DO CUPOM (Sem indentação para ficar colado na esquerda)
               const cupomCliente = `\`\`\`
-      🧾  MELHOR MARMITA  🍱
-      CUPOM: #${data.id.slice(-4)}
+🧾 MELHOR MARMITA 🍱
+CUPOM: #${data.id.slice(-4)}
 ${SEPARADOR}
 CLIENTE: ${memoria.nome.toUpperCase()}
 DATA: ${dataBr} - ${horaBr}
 ${SEPARADOR}
 ${resumoItens}${SEPARADOR}
-${alinharValor("SUBTOTAL:", subtotalVal)}
-${alinharValor("FRETE:", memoria.valorFrete)}
-${alinharValor("TOTAL PAGO:", valorPago)}
+${alinhar("SUBTOTAL:", subtotalVal)}
+${alinhar("FRETE:", memoria.valorFrete)}
+${alinhar("TOTAL PAGO:", valorPago)}
 ${SEPARADOR}
 ✅ PAGAMENTO CONFIRMADO
 \`\`\``;
@@ -333,8 +330,9 @@ ${SEPARADOR}
               await enviarMensagemWA(numeroCliente, cupomCliente);
               await enviarMensagemWA(numeroCliente, `Muito obrigado, ${memoria.nome}! Seu pedido já foi para a cozinha. 🍱🔥`);
               
-              // Garante envio para o Admin (pela variável do Render OU fixo do código)
-              await enviarMensagemWA(process.env.NUMERO_ADMIN || NUMERO_ADMIN, msgAdmin); 
+              // Envia pro Admin
+              const adminDestino = process.env.NUMERO_ADMIN || '5551985013496@c.us';
+              await enviarMensagemWA(adminDestino, msgAdmin); 
           }
         }
       } catch (error) { console.error("Erro Webhook:", error); }
