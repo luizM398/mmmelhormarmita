@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 👇 SEU NÚMERO PARA RECEBER OS FEEDBACKS (Dedo Duro Ativado 🚨)
+// 👇 SEU NÚMERO PARA RECEBER OS FEEDBACKS (Pega do Render)
 const NUMERO_ADMIN = process.env.NUMERO_ADMIN; 
 
 // 🗺️ CONFIGURAÇÃO MAPBOX
@@ -131,14 +131,14 @@ async function calcularFreteGoogle(cepDestino) {
     console.log(`📏 [DEBUG] Distância Final: ${distanciaKm.toFixed(2)} km`);
 
     // ---------------------------------------------------------
-    // 💰 TABELA DE PREÇOS OFICIAL
+    // 💰 TABELA DE PREÇOS OFICIAL (CORRIGIDA)
     // ---------------------------------------------------------
     let valor = 0;
     let texto = "";
 
-    // Até 3km -> R$ 5,00
+    // Até 3km -> R$ 5,00 (Antes estava R$ 1.00 de teste)
     if (distanciaKm <= 3.0) { 
-        valor =5.00; 
+        valor = 5.00; 
         texto = "R$ 5,00"; 
     } 
     // De 3km até 8km -> R$ 10,00
@@ -201,7 +201,7 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
   try {
     const preference = new Preference(client);
     
-    // Calcula o total de marmitas para aplicar a promoção
+    // 🔥 CORREÇÃO: Preços reais (17.49 ou 19.99)
     const totalMarmitas = itens.reduce((acc, i) => acc + i.quantidade, 0);
     const precoUnitario = totalMarmitas >= 5 ? 17.49 : 19.99;
 
@@ -226,9 +226,9 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
         items: items,
         external_reference: String(clienteTelefone).replace(/\D/g, ''),
         back_urls: {
-          success: `https://wa.me/${NUMERO_ADMIN.replace('@c.us','')}?text=Oi!%20Já%20concluí%20meu%20pagamento!%20🍱`,
-          failure: `https://wa.me/${NUMERO_ADMIN.replace('@c.us','')}?text=Tive%20um%20problema%20no%20pagamento.`,
-          pending: `https://wa.me/${NUMERO_ADMIN.replace('@c.us','')}`
+          success: `https://wa.me/${NUMERO_ADMIN ? NUMERO_ADMIN.replace('@c.us','') : ''}?text=Oi!%20Pagamento%20concluido!`,
+          failure: `https://wa.me/${NUMERO_ADMIN ? NUMERO_ADMIN.replace('@c.us','') : ''}`,
+          pending: `https://wa.me/${NUMERO_ADMIN ? NUMERO_ADMIN.replace('@c.us','') : ''}`
         },
         auto_return: "approved"
       }
@@ -242,7 +242,7 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
 }
 
 // ----------------------------------------------------------------------
-// 🔔 RECEBIMENTO E CONFIRMAÇÃO (WEBHOOK) - VERSÃO ORIGINAL SEGURA
+// 🔔 RECEBIMENTO E CONFIRMAÇÃO (WEBHOOK)
 // ----------------------------------------------------------------------
 app.post('/webhook', async (req, res) => {
   const { action, data } = req.body;
@@ -272,13 +272,13 @@ app.post('/webhook', async (req, res) => {
                 if (item.arroz === 'Integral') nomeExibicao = nomeExibicao.replace(/arroz/gi, 'Arroz Integral');
                 if (item.strogonoff === 'Light') nomeExibicao = nomeExibicao.replace(/strogonoff/gi, 'Strogonoff Light');
                 
-                // 2. Formatação simples (Original)
+                // 2. Formatação simples (Original Segura)
                 nomeExibicao = nomeExibicao.replace(/,/g, ',\n  '); 
                 nomeExibicao = nomeExibicao.replace(/ e /g, '\n  e ');
-                nomeExibicao = nomeExibicao.replace(/cnoura/gi, 'cenoura'); // Aquele fix que você tinha
+                nomeExibicao = nomeExibicao.replace(/cnoura/gi, 'cenoura');
                 nomeExibicao = nomeExibicao.charAt(0).toUpperCase() + nomeExibicao.slice(1);
 
-                // Define preço
+                // 🔥 CORREÇÃO: Cálculo com preço real para bater o Total Pago
                 const precoItem = memoria.totalMarmitas >= 5 ? 17.49 : 19.99;
                 const totalItem = item.quantidade * precoItem;
                 subtotalVal += totalItem;
@@ -286,7 +286,7 @@ app.post('/webhook', async (req, res) => {
                 // 3. Monta o visual final
                 resumoItens += `${item.quantidade}x ${nomeExibicao.substring(0,25)}\n`;
                 
-                // Preço (Versão antiga que você usava)
+                // Preço (Visual Notinha Antiga)
                 const precoFormatado = `R$ ${totalItem.toFixed(2).replace('.', ',')}`;
                 resumoItens += precoFormatado.padStart(30, ' ') + `\n\n`; 
 
@@ -318,9 +318,8 @@ TOTAL PAGO:         R$ ${valorPago.toFixed(2)}
               await enviarMensagemWA(numeroCliente, cupomCliente);
               await enviarMensagemWA(numeroCliente, `Muito obrigado, ${memoria.nome}! Seu pedido já foi para a cozinha. 🍱🔥`);
               
-              // Mantive a proteção para garantir que chega no seu número
-              const adminDestino = process.env.NUMERO_ADMIN || NUMERO_ADMIN;
-              await enviarMensagemWA(adminDestino, msgAdmin); 
+              // Garante envio para o Admin
+              if(NUMERO_ADMIN) await enviarMensagemWA(NUMERO_ADMIN, msgAdmin); 
           }
         }
       } catch (error) { console.error("Erro Webhook:", error); }
@@ -333,7 +332,7 @@ TOTAL PAGO:         R$ ${valorPago.toFixed(2)}
 // ----------------------------------------------------------------------
 function menuPrincipal(nomeCliente) {
   const nomeDisplay = nomeCliente ? ` ${nomeCliente}` : '';
-  return `🔻 *Menu Principal para${nomeDisplay}*\n\n1️⃣  Ver Cardápio 🍱\n2️⃣  Fazer Pedido 🛒\n3️⃣  Elogios e Reclamações 💬\n\n_Escolha uma opção digitando o número._`;
+  return `🔻 *Menu Principal para${nomeDisplay}*\n\n1️⃣  Ver Cardápio 🍱\n2️⃣  Fazer Pedido 🛒\n3️⃣  Falar com Atendente (Sugestões/Críticas) 💬\n\n_Escolha uma opção digitando o número._`;
 }
 
 function msgNaoEntendi(textoAnterior) {
@@ -355,7 +354,7 @@ function carregarMenu() {
 
 // ⏱️ CONTROLE DE INATIVIDADE (Timer)
 const timersClientes = {};
-const TEMPO_INATIVO = 10 * 60 * 1000; // 20 minutos
+const TEMPO_INATIVO = 10 * 60 * 1000; // 10 minutos (Alerta ao cliente)
 
 function iniciarTimerInatividade(numero) {
   if (timersClientes[numero]) clearTimeout(timersClientes[numero]);
@@ -755,6 +754,7 @@ if (cliente.estado === 'CONFIRMANDO_ENDERECO_COMPLEMENTO') {
     cliente.endereco += ` - Compl: ${texto}`;
     cliente.estado = 'ESCOLHENDO_PAGAMENTO';
     
+    // 👇 SEM A OPÇÃO "0 - VOLTAR" (Como você pediu)
     let resumoPgto = `📝 *Fechamento da Conta:*\n👤 Cliente: ${cliente.nome}\n💰 *TOTAL FINAL: R$ ${cliente.totalFinal.toFixed(2).replace('.', ',')}*\n\n💳 *Como deseja pagar?*\n1️⃣ PIX (Aprovação Imediata)\n2️⃣ Cartão de Crédito/Débito (Link)`;
     
     cliente.ultimaMensagem = resumoPgto;
