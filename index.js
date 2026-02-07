@@ -417,9 +417,6 @@ app.post('/mensagem', async (req, res) => {
     const diaSemana = dataBrasil.getDay(); 
     const horaAtual = dataBrasil.getHours();
 
-    const isFinalDeSemana = (diaSemana === 0 || diaSemana === 6);
-    const isForaDoHorario = (horaAtual < 8 || horaAtual >= 18);
-
     if (isFinalDeSemana || isForaDoHorario) {
         if (numero !== process.env.NUMERO_ADMIN && numero !== NUMERO_ADMIN.replace('@c.us', '')) {
             const avisoFechado = `🍱 *Olá! A Melhor Marmita agradece seu contato.*\n\n🚫 No momento estamos *FECHADOS*.\n\n⏰ Horário: Seg a Sex, das 08h às 18h.\n\nResponderemos assim que iniciarmos nosso expediente! 👋`;
