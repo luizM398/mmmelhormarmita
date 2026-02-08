@@ -78,46 +78,38 @@ setInterval(() => {
 }, 60000);
 
 
-// ----------------------------------------------------------------------
-// 📄 GERADOR DE PDF PROFISSIONAL (API2PDF)
-// ----------------------------------------------------------------------
+// Função PROFISSIONAL com API2PDF (Retorna LINK)
 async function gerarPDFGratis(cliente) {
     try {
-        console.log("⏳ Gerando PDF Profissional (API2PDF)...");
+        console.log("⏳ Gerando Link do PDF (API2PDF)...");
 
         // 👇 SUA CHAVE DO SITE AQUI
         const MINHA_API_KEY = "9409e59e-8602-4930-8c1e-bcf796639659"; 
 
         if (MINHA_API_KEY === "COLE_SUA_API_KEY_AQUI") {
-            console.log("⚠️ ERRO: Você esqueceu de colocar a API KEY no código!");
+            console.log("⚠️ ERRO: API KEY não configurada!");
             return null;
         }
 
-        // 1. Configurações Visuais
+        // Configurações e Lógica (Igualzinho antes)
         const urlLogo = "https://i.postimg.cc/R0J0ccxD/Chat-GPT-Image-8-de-fev-de-2026-08-07-06.png"; 
         const corPrincipal = "#ff6b00"; 
         const corPrecoNovo = "#009e2a";
 
-        // 2. Lógica de Promoção
         const qtdTotal = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
         const ehPromo = qtdTotal >= 5;
         
-        // ⚠️ VALORES DE TESTE (R$ 1,00)
-        // Quando for vender, mude para: 19.99 e 17.49
-        const precoNormal = 0.05; 
-        const precoPromo = 0.01; 
+        // ⚠️ VALORES DE TESTE
+        const precoNormal = 1.00; 
+        const precoPromo = 0.50; 
 
-        // 3. Monta HTML
         const linhasTabela = cliente.pedido.map(item => {
             const totalItemNormal = item.quantidade * precoNormal;
             const totalItemPromo = item.quantidade * precoPromo;
-            
             let nomePrato = item.prato.replace(/, /g, ' ').substring(0, 35);
-            
             let colPreco = ehPromo 
                 ? `<div style='font-size:10px;color:#999;text-decoration:line-through'>de R$${totalItemNormal.toFixed(2).replace('.', ',')}</div><div style='font-size:14px;color:${corPrecoNovo};font-weight:bold'>por R$${totalItemPromo.toFixed(2).replace('.', ',')}</div>`
                 : `R$ ${totalItemNormal.toFixed(2).replace('.', ',')}`;
-
             return `<tr><td style='padding:10px;border-bottom:1px solid #eee'><span style='font-weight:bold'>${item.quantidade}x</span> ${nomePrato}</td><td style='text-align:right;padding:10px;border-bottom:1px solid #eee'>${colPreco}</td></tr>`;
         }).join('');
 
@@ -129,53 +121,7 @@ async function gerarPDFGratis(cliente) {
             ? `<p>Subtotal: <span style='text-decoration:line-through;color:#999'>R$ ${subtotalSem.toFixed(2).replace('.', ',')}</span> <strong style='color:${corPrecoNovo}'>R$ ${subtotalCom.toFixed(2).replace('.', ',')}</strong></p><p style="font-size:10px;color:${corPrecoNovo}">(Desconto aplicado! 🎉)</p>`
             : `<p>Subtotal: R$ ${subtotalSem.toFixed(2).replace('.', ',')}</p>`;
 
-        const html = `
-        <!DOCTYPE html>
-        <html>
-        <head><meta charset='UTF-8'>
-        <style>
-            body{font-family:Helvetica,sans-serif;color:#333;padding:20px}
-            .head{text-align:center;margin-bottom:30px}
-            .logo{max-width:100px;margin-bottom:10px}
-            .tit{color:${corPrincipal};font-size:22px;font-weight:bold}
-            .inf{background:#fdfdfd;padding:15px;border-radius:8px;font-size:14px;margin-bottom:20px;border:1px solid #eee;border-left:5px solid ${corPrincipal}}
-            table{width:100%;border-collapse:collapse;margin-bottom:20px}
-            th{text-align:left;color:#555;font-size:12px;text-transform:uppercase;border-bottom:2px solid #ddd;padding:5px}
-            .tot{text-align:right;margin-top:20px;font-size:14px}
-            .fin{font-size:20px;font-weight:bold;color:${corPrincipal};margin-top:10px;border-top:1px solid #ddd;padding-top:10px}
-            .foot{text-align:center;margin-top:40px;font-size:11px;color:#aaa}
-        </style>
-        </head>
-        <body>
-            <div class='head'>
-                <img src='${urlLogo}' class='logo'>
-                <div class='tit'>MELHOR MARMITA</div>
-                <div style='color:#777;font-size:12px'>Pedido #${Math.floor(Math.random()*8999)+1000}</div>
-            </div>
-            <div class='inf'>
-                <strong>Cliente:</strong> ${cliente.nome}<br>
-                <strong>Entrega:</strong> ${cliente.endereco}
-            </div>
-            <table>
-                <thead><tr><th>Itens</th><th style='text-align:right'>Valor</th></tr></thead>
-                <tbody>${linhasTabela}</tbody>
-            </table>
-            <div class='tot'>
-                ${htmlSub}
-                <p>Taxa de Entrega: R$ ${cliente.valorFrete.toFixed(2).replace('.', ',')}</p>
-                <div class='fin'>TOTAL: R$ ${totalFinal.toFixed(2).replace('.', ',')}</div>
-                <br>
-                <span style='background:#eee;padding:5px 10px;border-radius:20px'>
-                    Pagamento: ${cliente.pagamentoConfirmado ? 'CONFIRMADO ✅' : 'Pendente'}
-                </span>
-            </div>
-            <div class='foot'>
-                <p>Obrigado pela preferência! 😋</p>
-                <p>Gerado em ${new Date().toLocaleString('pt-BR')}</p>
-            </div>
-        </body>
-        </html>
-        `;
+        const html = `<!DOCTYPE html><html><head><meta charset='UTF-8'><style>body{font-family:Helvetica,sans-serif;color:#333;padding:20px}.head{text-align:center;margin-bottom:30px}.logo{max-width:100px;margin-bottom:10px}.tit{color:${corPrincipal};font-size:22px;font-weight:bold}.inf{background:#fdfdfd;padding:15px;border-radius:8px;font-size:14px;margin-bottom:20px;border:1px solid #eee;border-left:5px solid ${corPrincipal}}table{width:100%;border-collapse:collapse;margin-bottom:20px}th{text-align:left;color:#555;font-size:12px;text-transform:uppercase;border-bottom:2px solid #ddd;padding:5px}.tot{text-align:right;margin-top:20px;font-size:14px}.fin{font-size:20px;font-weight:bold;color:${corPrincipal};margin-top:10px;border-top:1px solid #ddd;padding-top:10px}.foot{text-align:center;margin-top:40px;font-size:11px;color:#aaa}</style></head><body><div class='head'><img src='${urlLogo}' class='logo'><div class='tit'>MELHOR MARMITA</div><div style='color:#777;font-size:12px'>Pedido #${Math.floor(Math.random()*8999)+1000}</div></div><div class='inf'><strong>Cliente:</strong> ${cliente.nome}<br><strong>Entrega:</strong> ${cliente.endereco}</div><table><thead><tr><th>Itens</th><th style='text-align:right'>Valor</th></tr></thead><tbody>${linhasTabela}</tbody></table><div class='tot'>${htmlSub}<p>Taxa de Entrega: R$ ${cliente.valorFrete.toFixed(2).replace('.', ',')}</p><div class='fin'>TOTAL: R$ ${totalFinal.toFixed(2).replace('.', ',')}</div><br><span style='background:#eee;padding:5px 10px;border-radius:20px'>Pagamento: ${cliente.pagamentoConfirmado ? 'CONFIRMADO ✅' : 'Pendente'}</span></div><div class='foot'><p>Obrigado pela preferência! 😋</p><p>Gerado em ${new Date().toLocaleString('pt-BR')}</p></div></body></html>`;
 
         // 4. CHAMA A API2PDF
         const response = await axios.post('https://v2.api2pdf.com/chrome/pdf/html', 
@@ -183,27 +129,18 @@ async function gerarPDFGratis(cliente) {
                 html: html,
                 inlinePdf: true,
                 fileName: 'nota_fiscal.pdf',
-                options: {
-                    printBackground: true,
-                    pageSize: 'A5'
-                }
+                options: { printBackground: true, pageSize: 'A5' }
             },
-            {
-                headers: { 'Authorization': MINHA_API_KEY }
-            }
+            { headers: { 'Authorization': MINHA_API_KEY } }
         );
 
+        // 🔥 O PULO DO GATO: Retorna o LINK direto, não o arquivo pesado
         const pdfUrl = response.data.FileUrl;
-        
-        if (!pdfUrl) return null;
-
-        const fileResponse = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
-        const base64PDF = Buffer.from(fileResponse.data, 'binary').toString('base64');
-        
-        return base64PDF;
+        console.log("✅ Link gerado:", pdfUrl);
+        return pdfUrl;
 
     } catch (error) {
-        console.error("❌ Erro API2PDF:", error.response ? error.response.data : error.message);
+        console.error("❌ Erro API2PDF:", error.message);
         return null;
     }
 }
@@ -410,15 +347,11 @@ async function enviarMensagemWA(numero, texto) {
   } catch (err) { console.error(`Erro envio msg:`, err.message); }
 }
 
-// Função de Enviar PDF (Versão Debug / Fofoqueira 🕵️‍♂️)
-async function enviarPDFWA(numero, base64, nomeArquivo) {
+// Função de Enviar PDF (Versão via URL - Mais Leve)
+async function enviarPDFWA(numero, urlPdf, nomeArquivo) {
     const numeroLimpo = String(numero).replace(/\D/g, '');
     try {
-      console.log(`📤 Tentando enviar PDF para ${numeroLimpo}...`);
-
-      // TENTATIVA 1: Manda o Base64 LIMPO (Sem o data:application...)
-      // A maioria das APIs prefere assim.
-      const base64Limpo = base64.replace(/^data:application\/pdf;base64,/, "");
+      console.log(`📤 Enviando URL do PDF para ${numeroLimpo}...`);
 
       const payload = { 
         to: numeroLimpo, 
@@ -426,7 +359,7 @@ async function enviarPDFWA(numero, base64, nomeArquivo) {
         mediaMessage: {
             mediatype: "document",
             fileName: nomeArquivo,
-            media: base64Limpo // Manda limpo
+            media: urlPdf // AQUI VAI O LINK DIRETO (http://...)
         }
       };
 
@@ -435,22 +368,13 @@ async function enviarPDFWA(numero, base64, nomeArquivo) {
         { headers: { Authorization: `Bearer ${process.env.WASENDER_TOKEN}`, 'Content-Type': 'application/json' } }
       );
 
-      // 👇 AQUI ESTÁ O SEGREDO: Vamos ver o que eles responderam!
-      console.log("📡 RESPOSTA REAL DA WASENDER:", JSON.stringify(response.data, null, 2));
-
-      if (response.data && response.data.status === false) {
-          console.error("❌ A API recusou o envio:", response.data);
-      } else {
-          console.log("✅ PDF enviado (segundo a API)!");
-      }
+      console.log("📡 Status Envio:", JSON.stringify(response.data));
 
     } catch (err) { 
-      console.error(`❌ Erro CRÍTICO no envio:`, err.message); 
-      if (err.response) {
-          console.error("Dados do erro:", err.response.data);
-      }
+      console.error(`❌ Erro Envio:`, err.message); 
     }
 }
+
 // ----------------------------------------------------------------------
 // 🚀 ROTAS DE EXECUÇÃO
 // ----------------------------------------------------------------------
