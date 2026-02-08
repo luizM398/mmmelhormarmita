@@ -374,9 +374,9 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
         external_reference: String(clienteTelefone).replace(/\D/g, ''),
         // Aqui está a correção: agora volta para a LOJA
         back_urls: {
-          success: `https://wa.me/${SEU_NUMERO_LOJA}?text=Oi!%20Pagamento%20concluido!`,
-          failure: `https://wa.me/${SEU_NUMERO_LOJA}?text=Oi!%20Tive%20problema%20no%20pagamento.`,
-          pending: `https://wa.me/${SEU_NUMERO_LOJA}?text=Oi!%20Pagamento%20pendente.`
+          success: `https://wa.me/${SEU_NUMERO_LOJA}`,
+          failure: `https://wa.me/${SEU_NUMERO_LOJA}`,
+          pending: `https://wa.me/${SEU_NUMERO_LOJA}`
         },
         auto_return: "approved"
       }
