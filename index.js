@@ -421,13 +421,35 @@ app.post('/webhook', async (req, res) => {
                   await enviarMensagemWA(numeroCliente, "🧾 Segue comprovante simples (PDF indisponível no momento).");
               }
 
-              // 4. MENSAGEM FINAL E AVISO AO ADMIN
-              const msgAdmin = `🔔 *NOVO PEDIDO PAGO!* 👨‍🍳🔥\n👤 *CLIENTE:* ${memoria.nome}\n📍 *ENTREGA:* ${memoria.endereco}\n💰 *TOTAL: R$ ${valorPago.toFixed(2)}*`;
+              // 4. MENSAGEM FINAL E AVISO AO ADMIN (DETALHADO)
               
+              // A) Monta a lista de itens igual ao PDF
+              const resumoItens = memoria.pedido.map(item => {
+                  let nomePrato = item.prato;
+                  // Ajusta nome se for Integral ou Light
+                  if (item.arroz === 'Integral') nomePrato = nomePrato.replace(/Arroz/i, 'Arroz integral');
+                  if (item.strogonoff === 'Light') nomePrato = nomePrato.replace(/strogonoff/i, 'strogonoff light');
+                  
+                  return `▪️ *${item.quantidade}x* ${nomePrato}`;
+              }).join('\n');
+
+              // B) Mensagem para o DONO (Você)
+              const msgAdmin = `🔔 *NOVO PEDIDO PAGO!* 👨‍🍳🔥\n\n` +
+                  `👤 *Cliente:* ${memoria.nome}\n` +
+                  `📱 *Zap:* ${numeroCliente}\n` +
+                  `📍 *Endereço:* ${memoria.endereco}\n` +
+                  `📝 *Compl:* ${memoria.complemento || 'Sem compl.'}\n\n` +
+                  `🍲 *PEDIDO:*\n${resumoItens}\n\n` +
+                  `🚚 *Frete:* R$ ${memoria.valorFrete.toFixed(2)}\n` +
+                  `💰 *TOTAL PAGO: R$ ${valorPago.toFixed(2)}*`;
+              
+              // C) Envia para o Cliente
               await enviarMensagemWA(numeroCliente, `Muito obrigado, ${memoria.nome}! Seu pedido já foi para a cozinha. 🍱🔥`);
               
+              // D) Envia para o Admin
               if(NUMERO_ADMIN) await enviarMensagemWA(NUMERO_ADMIN, msgAdmin); 
           }
+        }
         }
       } catch (error) { console.error("Erro Webhook:", error); }
   }
