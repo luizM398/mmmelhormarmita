@@ -107,8 +107,8 @@ async function gerarPDFGratis(cliente) {
         const horaPedido = new Date().toLocaleTimeString('pt-BR').substring(0,5);
 
         // ⚠️ VALORES DE TESTE (R$ 1,00)
-        const precoNormal = 1.00; 
-        const precoPromo = 0.50; 
+        const precoNormal = 0.05; 
+        const precoPromo = 0.01; 
 
         // 3. Monta as Linhas da Tabela (AGORA COM NOMES INTELIGENTES)
         const linhasTabela = cliente.pedido.map(item => {
