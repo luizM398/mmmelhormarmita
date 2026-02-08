@@ -104,8 +104,8 @@ async function gerarPDFGratis(cliente) {
         
         // ⚠️ VALORES DE TESTE (R$ 1,00)
         // Quando for vender, mude para: 19.99 e 17.49
-        const precoNormal = 1.00; 
-        const precoPromo = 0.50; 
+        const precoNormal = 0.05; 
+        const precoPromo = 0.01; 
 
         // 3. Monta HTML
         const linhasTabela = cliente.pedido.map(item => {
