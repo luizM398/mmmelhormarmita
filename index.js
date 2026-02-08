@@ -771,6 +771,7 @@ if (cliente.estado === 'ESCOLHENDO_PAGAMENTO' || cliente.estado === 'AGUARDANDO_
          await enviarMensagemWA(numero, `Aqui está seu código PIX:`);
          await enviarMensagemWA(numero, dadosPix.copiaCola); 
          await enviarMensagemWA(numero, `✅ Copie e cole no seu banco. Aguardando pagamento...`);
+         await enviarMensagemWA(numero, `🔄 Se quiser trocar a forma de pagamento, digite *0*.`);
          cliente.estado = 'AGUARDANDO_PAGAMENTO';
      } else { await enviarMensagemWA(numero, "⚠️ Erro no PIX. Tente novamente."); }
   } 
@@ -779,6 +780,7 @@ if (cliente.estado === 'ESCOLHENDO_PAGAMENTO' || cliente.estado === 'AGUARDANDO_
      const link = await gerarLinkPagamento(cliente.pedido, cliente.valorFrete, numero);
      if (link) {
          await enviarMensagemWA(numero, `✅ *Clique para pagar:*\n${link}`);
+         await enviarMensagemWA(numero, `🔄 Se quiser trocar a forma de pagamento, digite *0*.`);
          cliente.estado = 'AGUARDANDO_PAGAMENTO';
      } else { await enviarMensagemWA(numero, "⚠️ Erro no link. Tente PIX."); }
   }
