@@ -410,12 +410,17 @@ async function enviarMensagemWA(numero, texto) {
   } catch (err) { console.error(`Erro envio msg:`, err.message); }
 }
 
-// 🆕 Envia PDF (Base64)
+// Função de Enviar PDF Corrigida
 async function enviarPDFWA(numero, base64, nomeArquivo) {
     const numeroLimpo = String(numero).replace(/\D/g, '');
     try {
-      // Tenta enviar usando o formato padrão de Base64
-      // Se sua API usar outro endpoint (ex: /send-file), mude a URL abaixo
+      
+      // 👇 AQUI ESTÁ A CORREÇÃO MÁGICA
+      // Se o código não tiver o prefixo, a gente coloca na marra.
+      const base64Completo = base64.startsWith('data:') 
+          ? base64 
+          : `data:application/pdf;base64,${base64}`;
+
       await axios.post('https://www.wasenderapi.com/api/send-message', 
         { 
             to: numeroLimpo, 
@@ -423,17 +428,16 @@ async function enviarPDFWA(numero, base64, nomeArquivo) {
             mediaMessage: {
                 mediatype: "document",
                 fileName: nomeArquivo,
-                media: base64
+                media: base64Completo // Agora vai com a etiqueta!
             }
         }, 
         { headers: { Authorization: `Bearer ${process.env.WASENDER_TOKEN}`, 'Content-Type': 'application/json' } }
       );
-      console.log("📄 PDF enviado com sucesso!");
+      console.log("📄 PDF enviado com sucesso (Com prefixo DataURI)!");
     } catch (err) { 
       console.error(`Erro envio PDF:`, err.message); 
-      // Fallback: Se der erro no PDF, avisa no console
     }
-  }
+}
 
 // ----------------------------------------------------------------------
 // 🚀 ROTAS DE EXECUÇÃO
