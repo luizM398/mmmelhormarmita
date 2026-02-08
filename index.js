@@ -610,7 +610,7 @@ if (cliente.estado === 'MENU') {
   }
   if (mensagem === '3') { 
     cliente.estado = 'ELOGIOS';
-    await enviarMensagemWA(numero, `💬 screva sua mensagem abaixo (0 para voltar):`); 
+    await enviarMensagemWA(numero, `💬 Escreva sua mensagem abaixo (0 para voltar):`); 
     return res.status(200).json({ ok: true });
   }
   if (mensagem === '0') { await enviarMensagemWA(numero, menuPrincipal(cliente.nome)); return res.status(200).json({ ok: true }); }
