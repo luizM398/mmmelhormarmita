@@ -83,148 +83,65 @@ setInterval(() => {
 // ----------------------------------------------------------------------
 async function gerarPDFGratis(cliente) {
     try {
-        console.log("⏳ Gerando PDF via POST (Sem limite de tamanho)...");
+        console.log("⏳ Gerando PDF (Método GET Otimizado)...");
 
-        // 1. Configurações Visuais
-        // 👇 SEU LOGO NOVO AQUI
+        // 👇 SEU LOGO
         const urlLogo = "https://i.postimg.cc/R0J0ccxD/Chat-GPT-Image-8-de-fev-de-2026-08-07-06.png"; 
-        const corPrincipal = "#ff6b00"; // Laranja
-        const corPrecoNovo = "#009e2a"; // Verde
+        const corPrincipal = "#ff6b00";
+        const corPrecoNovo = "#009e2a";
 
-        // 2. Verifica Promoção
+        // Lógica de Promoção e Valores
         const qtdTotal = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
         const ehPromo = qtdTotal >= 5;
-
-        // VALORES DE TESTE (R$ 1,00 e R$ 0,50)
+        
+        // ⚠️ ATENÇÃO: Valores de Teste Ativos (R$ 1,00). 
         // Lembre-se de voltar para 19.99 e 17.49 depois!
         const precoNormal = 1.00; 
         const precoPromo = 0.50; 
 
-        // 3. Monta as linhas
+        // Monta Linhas (Sem pular linha no código para economizar espaço)
         const linhasTabela = cliente.pedido.map(item => {
             const totalItemNormal = item.quantidade * precoNormal;
             const totalItemPromo = item.quantidade * precoPromo;
-
-            let colunaPreco = "";
+            let nomePrato = item.prato.replace(/, /g, ' ').substring(0, 30);
             
-            if (ehPromo) {
-                colunaPreco = `
-                    <div style="font-size: 11px; color: #999; text-decoration: line-through;">
-                        de R$ ${totalItemNormal.toFixed(2).replace('.', ',')}
-                    </div>
-                    <div style="font-size: 14px; color: ${corPrecoNovo}; font-weight: bold;">
-                        por R$ ${totalItemPromo.toFixed(2).replace('.', ',')}
-                    </div>
-                `;
-            } else {
-                colunaPreco = `R$ ${totalItemNormal.toFixed(2).replace('.', ',')}`;
-            }
+            // Coluna de Preço Otimizada
+            let colPreco = ehPromo 
+                ? `<div style='font-size:10px;color:#999;text-decoration:line-through'>R$${totalItemNormal.toFixed(2)}</div><div style='font-size:14px;color:${corPrecoNovo};font-weight:bold'>R$${totalItemPromo.toFixed(2)}</div>`
+                : `R$ ${totalItemNormal.toFixed(2)}`;
 
-            let nomePrato = item.prato.replace(/, /g, ' ').substring(0, 35);
-
-            return `
-            <tr>
-                <td style="padding: 10px; border-bottom: 1px solid #eee;">
-                    <span style="font-weight:bold;">${item.quantidade}x</span> ${nomePrato}
-                </td>
-                <td style="text-align: right; padding: 10px; border-bottom: 1px solid #eee;">
-                    ${colunaPreco}
-                </td>
-            </tr>`;
+            return `<tr><td style='padding:8px;border-bottom:1px solid #eee'><span style='font-weight:bold'>${item.quantidade}x</span> ${nomePrato}</td><td style='text-align:right;padding:8px;border-bottom:1px solid #eee'>${colPreco}</td></tr>`;
         }).join('');
 
-        // 4. Totais
-        const subtotalSemDesconto = qtdTotal * precoNormal;
-        const subtotalComDesconto = qtdTotal * precoPromo;
+        // Totais
+        const subtotalSem = qtdTotal * precoNormal;
+        const subtotalCom = qtdTotal * precoPromo;
+        const totalFinal = ehPromo ? subtotalCom + cliente.valorFrete : subtotalSem + cliente.valorFrete;
         
-        let htmlSubtotal = "";
-        if (ehPromo) {
-             htmlSubtotal = `
-                <p>Subtotal: <span style="text-decoration: line-through; color: #999;">R$ ${subtotalSemDesconto.toFixed(2).replace('.', ',')}</span> 
-                   <strong style="color: ${corPrecoNovo};"> R$ ${subtotalComDesconto.toFixed(2).replace('.', ',')}</strong>
-                </p>
-                <p style="font-size: 10px; color: ${corPrecoNovo}; margin-top: -5px;">(Desconto aplicado! 🎉)</p>
-             `;
-        } else {
-             htmlSubtotal = `<p>Subtotal: R$ ${subtotalSemDesconto.toFixed(2).replace('.', ',')}</p>`;
-        }
+        let htmlSub = ehPromo 
+            ? `<p>Sub: <span style='text-decoration:line-through;color:#999'>R$${subtotalSem.toFixed(2)}</span> <strong style='color:${corPrecoNovo}'>R$${subtotalCom.toFixed(2)}</strong></p>`
+            : `<p>Sub: R$${subtotalSem.toFixed(2)}</p>`;
 
-        const totalFinalCalculado = ehPromo ? subtotalComDesconto + cliente.valorFrete : subtotalSemDesconto + cliente.valorFrete;
+        // HTML COMPACTADO (Uma linha só se possível)
+        // O segredo aqui é usar aspas simples '' dentro do HTML e não deixar espaços inúteis
+        const html = `<!DOCTYPE html><html><head><meta charset='UTF-8'><style>body{font-family:Helvetica,sans-serif;color:#333}.box{max-width:100%;padding:15px}.head{text-align:center;margin-bottom:20px}.logo{max-width:80px;margin-bottom:5px}.tit{color:${corPrincipal};font-size:20px;font-weight:bold}.inf{background:#f8f8f8;padding:10px;border-radius:5px;font-size:13px;margin-bottom:15px;border-left:4px solid ${corPrincipal}}table{width:100%;border-collapse:collapse;margin-bottom:15px}th{text-align:left;color:#555;font-size:11px;text-transform:uppercase;border-bottom:2px solid #ddd;padding:5px}.tot{text-align:right;margin-top:15px;font-size:13px}.fin{font-size:18px;font-weight:bold;color:${corPrincipal};margin-top:5px;border-top:1px solid #ddd;padding-top:5px}.foot{text-align:center;margin-top:30px;font-size:10px;color:#aaa}</style></head><body><div class='box'><div class='head'><img src='${urlLogo}' class='logo'><div class='tit'>MELHOR MARMITA</div><div style='color:#777;font-size:10px'>Pedido #${Math.floor(Math.random()*8999)+1000}</div></div><div class='inf'><strong>Cli:</strong> ${cliente.nome}<br><strong>End:</strong> ${cliente.endereco}</div><table><thead><tr><th>Itens</th><th style='text-align:right'>$</th></tr></thead><tbody>${linhasTabela}</tbody></table><div class='tot'>${htmlSub}<p>Frete: R$${cliente.valorFrete.toFixed(2)}</p><div class='fin'>TOTAL: R$${totalFinal.toFixed(2)}</div><br><span style='background:#eee;padding:4px 8px;border-radius:10px'>Pgto: ${cliente.pagamentoConfirmado?'OK ✅':'Pendente'}</span></div><div class='foot'><p>Obrigado! 😋</p><p>${new Date().toLocaleString('pt-BR')}</p></div></div></body></html>`;
 
-        // 5. HTML COMPLETO
-        const html = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-        <meta charset="UTF-8">
-        <style>
-            body { font-family: 'Helvetica', sans-serif; color: #333; }
-            .container { max-width: 100%; padding: 20px; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .logo { max-width: 100px; margin-bottom: 10px; }
-            .titulo { color: ${corPrincipal}; font-size: 22px; font-weight: bold; margin: 0; }
-            .info-box { background: #fdfdfd; padding: 15px; border-radius: 8px; font-size: 14px; margin-bottom: 20px; border: 1px solid #eee; border-left: 5px solid ${corPrincipal}; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            th { text-align: left; color: #555; font-size: 12px; text-transform: uppercase; border-bottom: 2px solid #ddd; padding: 5px; }
-            .totais { text-align: right; margin-top: 20px; font-size: 14px; }
-            .total-final { font-size: 20px; font-weight: bold; color: ${corPrincipal}; margin-top: 10px; border-top: 1px solid #ddd; padding-top: 10px; display: inline-block;}
-            .footer { text-align: center; margin-top: 40px; font-size: 11px; color: #aaa; }
-        </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <img src="${urlLogo}" class="logo">
-                    <div class="titulo">MELHOR MARMITA</div>
-                    <div style="color: #777; font-size: 12px;">Pedido #${Math.floor(Math.random() * 8999) + 1000}</div>
-                </div>
-                <div class="info-box">
-                    <strong>Cliente:</strong> ${cliente.nome}<br>
-                    <strong>Entrega em:</strong> ${cliente.endereco}
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Itens</th>
-                            <th style="text-align: right;">Valor</th>
-                        </tr>
-                    </thead>
-                    <tbody>${linhasTabela}</tbody>
-                </table>
-                <div class="totais">
-                    ${htmlSubtotal}
-                    <p>Taxa de Entrega: R$ ${cliente.valorFrete.toFixed(2).replace('.', ',')}</p>
-                    <div class="total-final">TOTAL: R$ ${totalFinalCalculado.toFixed(2).replace('.', ',')}</div>
-                    <br>
-                    <span style="font-size: 12px; background: #eee; padding: 5px 10px; border-radius: 20px;">
-                        Pagamento: ${cliente.pagamentoConfirmado ? 'CONFIRMADO ✅' : 'Pendente'}
-                    </span>
-                </div>
-                <div class="footer">
-                    <p>Obrigado pela preferência! 😋</p>
-                    <p>Gerado em ${new Date().toLocaleString('pt-BR')}</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        `;
+        // 🔥 O PULO DO GATO: Removemos qualquer quebra de linha que tenha sobrado
+        const htmlMini = html.replace(/\n/g, '').replace(/\s+/g, ' ').trim();
 
-        // 🚨 A MUDANÇA MÁGICA ESTÁ AQUI EMBAIXO 👇
-        // Mudamos de axios.get para axios.post
-        const response = await axios.post('https://quickchart.io/pdf', 
-            { html: html }, // Envia o HTML no "pacote" (JSON)
-            { responseType: 'arraybuffer' } // Pede o arquivo de volta
-        );
+        // Volta para o GET (que funciona), mas agora com HTML magrinho
+        const urlAPI = `https://quickchart.io/pdf?html=${encodeURIComponent(htmlMini)}`;
         
+        const response = await axios.get(urlAPI, { responseType: 'arraybuffer' });
         const base64PDF = Buffer.from(response.data, 'binary').toString('base64');
         return base64PDF;
 
     } catch (error) {
         console.error("❌ Erro ao gerar PDF:", error.message);
+        // Fallback: Retorna null para o código principal enviar mensagem de texto
         return null;
     }
 }
-
 // ----------------------------------------------------------------------
 // 🚚 MOTOR DE FRETE
 // ----------------------------------------------------------------------
