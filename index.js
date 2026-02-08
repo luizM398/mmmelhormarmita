@@ -83,21 +83,24 @@ setInterval(() => {
 // ----------------------------------------------------------------------
 async function gerarPDFGratis(cliente) {
     try {
-        console.log("⏳ Gerando PDF Inteligente com Logo...");
+        console.log("⏳ Gerando PDF via POST (Sem limite de tamanho)...");
 
-        // Configurações Visuais
+        // 1. Configurações Visuais
+        // 👇 SEU LOGO NOVO AQUI
         const urlLogo = "https://i.postimg.cc/R0J0ccxD/Chat-GPT-Image-8-de-fev-de-2026-08-07-06.png"; 
         const corPrincipal = "#ff6b00"; // Laranja
-        const corPrecoNovo = "#009e2a"; // Verde (Dinheiro/Economia)
+        const corPrecoNovo = "#009e2a"; // Verde
 
-        // Verifica Promoção (5 ou mais marmitas)
+        // 2. Verifica Promoção
         const qtdTotal = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
         const ehPromo = qtdTotal >= 5;
 
-        const precoNormal = 0.05;
-        const precoPromo = 0.01;
+        // VALORES DE TESTE (R$ 1,00 e R$ 0,50)
+        // Lembre-se de voltar para 19.99 e 17.49 depois!
+        const precoNormal = 1.00; 
+        const precoPromo = 0.50; 
 
-        // Monta as linhas da tabela
+        // 3. Monta as linhas
         const linhasTabela = cliente.pedido.map(item => {
             const totalItemNormal = item.quantidade * precoNormal;
             const totalItemPromo = item.quantidade * precoPromo;
@@ -105,7 +108,6 @@ async function gerarPDFGratis(cliente) {
             let colunaPreco = "";
             
             if (ehPromo) {
-                // Efeito "DE / POR"
                 colunaPreco = `
                     <div style="font-size: 11px; color: #999; text-decoration: line-through;">
                         de R$ ${totalItemNormal.toFixed(2).replace('.', ',')}
@@ -118,7 +120,6 @@ async function gerarPDFGratis(cliente) {
                 colunaPreco = `R$ ${totalItemNormal.toFixed(2).replace('.', ',')}`;
             }
 
-            // Formata nome do prato (Tira vírgulas extras para caber)
             let nomePrato = item.prato.replace(/, /g, ' ').substring(0, 35);
 
             return `
@@ -132,7 +133,7 @@ async function gerarPDFGratis(cliente) {
             </tr>`;
         }).join('');
 
-        // Cálculos Totais
+        // 4. Totais
         const subtotalSemDesconto = qtdTotal * precoNormal;
         const subtotalComDesconto = qtdTotal * precoPromo;
         
@@ -150,7 +151,7 @@ async function gerarPDFGratis(cliente) {
 
         const totalFinalCalculado = ehPromo ? subtotalComDesconto + cliente.valorFrete : subtotalSemDesconto + cliente.valorFrete;
 
-        // HTML COMPLETO
+        // 5. HTML COMPLETO
         const html = `
         <!DOCTYPE html>
         <html>
@@ -162,15 +163,11 @@ async function gerarPDFGratis(cliente) {
             .header { text-align: center; margin-bottom: 30px; }
             .logo { max-width: 100px; margin-bottom: 10px; }
             .titulo { color: ${corPrincipal}; font-size: 22px; font-weight: bold; margin: 0; }
-            
             .info-box { background: #fdfdfd; padding: 15px; border-radius: 8px; font-size: 14px; margin-bottom: 20px; border: 1px solid #eee; border-left: 5px solid ${corPrincipal}; }
-            
             table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
             th { text-align: left; color: #555; font-size: 12px; text-transform: uppercase; border-bottom: 2px solid #ddd; padding: 5px; }
-            
             .totais { text-align: right; margin-top: 20px; font-size: 14px; }
             .total-final { font-size: 20px; font-weight: bold; color: ${corPrincipal}; margin-top: 10px; border-top: 1px solid #ddd; padding-top: 10px; display: inline-block;}
-            
             .footer { text-align: center; margin-top: 40px; font-size: 11px; color: #aaa; }
         </style>
         </head>
@@ -181,12 +178,10 @@ async function gerarPDFGratis(cliente) {
                     <div class="titulo">MELHOR MARMITA</div>
                     <div style="color: #777; font-size: 12px;">Pedido #${Math.floor(Math.random() * 8999) + 1000}</div>
                 </div>
-
                 <div class="info-box">
                     <strong>Cliente:</strong> ${cliente.nome}<br>
                     <strong>Entrega em:</strong> ${cliente.endereco}
                 </div>
-
                 <table>
                     <thead>
                         <tr>
@@ -194,11 +189,8 @@ async function gerarPDFGratis(cliente) {
                             <th style="text-align: right;">Valor</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        ${linhasTabela}
-                    </tbody>
+                    <tbody>${linhasTabela}</tbody>
                 </table>
-
                 <div class="totais">
                     ${htmlSubtotal}
                     <p>Taxa de Entrega: R$ ${cliente.valorFrete.toFixed(2).replace('.', ',')}</p>
@@ -208,7 +200,6 @@ async function gerarPDFGratis(cliente) {
                         Pagamento: ${cliente.pagamentoConfirmado ? 'CONFIRMADO ✅' : 'Pendente'}
                     </span>
                 </div>
-
                 <div class="footer">
                     <p>Obrigado pela preferência! 😋</p>
                     <p>Gerado em ${new Date().toLocaleString('pt-BR')}</p>
@@ -218,20 +209,21 @@ async function gerarPDFGratis(cliente) {
         </html>
         `;
 
-        // Chamada à API QuickChart
-        const urlAPI = `https://quickchart.io/pdf?html=${encodeURIComponent(html)}`;
-        const response = await axios.get(urlAPI, { responseType: 'arraybuffer' });
+        // 🚨 A MUDANÇA MÁGICA ESTÁ AQUI EMBAIXO 👇
+        // Mudamos de axios.get para axios.post
+        const response = await axios.post('https://quickchart.io/pdf', 
+            { html: html }, // Envia o HTML no "pacote" (JSON)
+            { responseType: 'arraybuffer' } // Pede o arquivo de volta
+        );
         
-        // Converte para Base64 (O WhatsApp precisa disso)
         const base64PDF = Buffer.from(response.data, 'binary').toString('base64');
         return base64PDF;
 
     } catch (error) {
-        console.error("❌ Erro ao gerar PDF:", error);
+        console.error("❌ Erro ao gerar PDF:", error.message);
         return null;
     }
 }
-
 
 // ----------------------------------------------------------------------
 // 🚚 MOTOR DE FRETE
@@ -390,7 +382,7 @@ app.post('/webhook', async (req, res) => {
 // ----------------------------------------------------------------------
 function menuPrincipal(nomeCliente) {
   const nomeDisplay = nomeCliente ? ` ${nomeCliente}` : '';
-  return `🔻 *Menu Principal para${nomeDisplay}*\n\n1️⃣  Ver Cardápio 🍱\n2️⃣  Fazer Pedido 🛒\n3️⃣  Falar com Atendente (Sugestões/Críticas) 💬\n\n_Escolha uma opção digitando o número._`;
+  return `🔻 *Menu Principal para${nomeDisplay}*\n\n1️⃣  Ver Cardápio 🍱\n2️⃣  Fazer Pedido 🛒\n3️⃣  Elogios e reclamações 💬\n\n_Escolha uma opção digitando o número._`;
 }
 
 function msgNaoEntendi(textoAnterior) {
@@ -537,9 +529,9 @@ if (cliente.estado === 'MENU') {
   if (mensagem === '1') { 
     const dados = carregarMenu();
     if(dados.length === 0) { await enviarMensagemWA(numero, "⚠️ Cardápio indisponível."); return res.status(200).json({ok:true}); }
-    let cardapio = `🍱 *Cardápio do Dia para ${cliente.nome}*\n🔥 *PROMOÇÃO:* Acima de 5 unid = *R$ 17,49/un*!\n⚖️ Peso: 400g\n\n`;
+    let cardapio = `🍱 *Cardápio do Dia para ${cliente.nome}*\n🔥 *PROMOÇÃO:* Acima de 5 unid \n o valor cai de ~~19,99~~ para *R$ 17,49/un*!\n⚖️ Peso: 400g\n\n`;
     dados.forEach(item => { cardapio += `🔹 ${item.PRATO} – R$ 19,99\n`; });
-    cardapio += `\nDigite *2* para pedir.`;
+    cardapio += `\nDigite *2* para pedir.\nDigite *0* para voltar ao Menu principal`;
     cliente.estado = 'VENDO_CARDAPIO';
     cliente.ultimaMensagem = cardapio; 
     await enviarMensagemWA(numero, cardapio);
@@ -558,7 +550,7 @@ if (cliente.estado === 'MENU') {
   }
   if (mensagem === '3') { 
     cliente.estado = 'ELOGIOS';
-    await enviarMensagemWA(numero, `💬 *Fale com o Atendente*\nEscreva sua mensagem abaixo (0 para voltar):`); 
+    await enviarMensagemWA(numero, `💬 screva sua mensagem abaixo (0 para voltar):`); 
     return res.status(200).json({ ok: true });
   }
   if (mensagem === '0') { await enviarMensagemWA(numero, menuPrincipal(cliente.nome)); return res.status(200).json({ ok: true }); }
@@ -732,7 +724,7 @@ if (cliente.estado === 'ELOGIOS') {
   if (mensagem === '0') { cliente.estado = 'MENU'; await enviarMensagemWA(numero, menuPrincipal(cliente.nome)); return res.status(200).json({ ok: true }); }
   await enviarMensagemWA(NUMERO_ADMIN, `🚨 *FEEDBACK:* ${cliente.nome} (${numero}): ${texto}`);
   cliente.estado = 'MENU';
-  await enviarMensagemWA(numero, `✅ Obrigado! Mensagem enviada.\n\n` + menuPrincipal(cliente.nome));
+  await enviarMensagemWA(numero, `✅ Obrigado! Se necessário, um atendente entrará em contato.\n\n` + menuPrincipal(cliente.nome));
   return res.status(200).json({ ok: true });
 }
 
