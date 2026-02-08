@@ -342,11 +342,20 @@ async function gerarPix(valor, clienteNome, clienteTelefone) {
   }
 }
 
+// ----------------------------------------------------------------------
+// 🔗 GERAR LINK (CORRIGIDO PARA VOLTAR PRO ROBÔ)
+// ----------------------------------------------------------------------
 async function gerarLinkPagamento(itens, frete, clienteTelefone) {
   try {
+    // 👇👇👇 COLOQUE O NÚMERO DA MARMITARIA AQUI (Com 55 + DDD) 👇👇👇
+    const SEU_NUMERO_LOJA = "5551984050946"; 
+
     const preference = new Preference(client);
     const totalMarmitas = itens.reduce((acc, i) => acc + i.quantidade, 0);
-    const precoUnitario = totalMarmitas >= 5 ? 0.01 : 0.05;
+    
+    // ⚠️ LEMBRETE: Mude aqui também quando for vender pra valer!
+    // Teste: 1.00 e 0.50 | Real: 19.99 e 17.49
+    const precoUnitario = totalMarmitas >= 5 ? 0.01 : 0.05; 
 
     const items = itens.map(item => ({
       title: item.prato,
@@ -363,16 +372,20 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
       body: {
         items: items,
         external_reference: String(clienteTelefone).replace(/\D/g, ''),
+        // Aqui está a correção: agora volta para a LOJA
         back_urls: {
-          success: `https://wa.me/${NUMERO_ADMIN ? NUMERO_ADMIN.replace('@c.us','') : ''}?text=Oi!%20Pagamento%20concluido!`,
-          failure: `https://wa.me/${NUMERO_ADMIN ? NUMERO_ADMIN.replace('@c.us','') : ''}`,
-          pending: `https://wa.me/${NUMERO_ADMIN ? NUMERO_ADMIN.replace('@c.us','') : ''}`
+          success: `https://wa.me/${SEU_NUMERO_LOJA}?text=Oi!%20Pagamento%20concluido!`,
+          failure: `https://wa.me/${SEU_NUMERO_LOJA}?text=Oi!%20Tive%20problema%20no%20pagamento.`,
+          pending: `https://wa.me/${SEU_NUMERO_LOJA}?text=Oi!%20Pagamento%20pendente.`
         },
         auto_return: "approved"
       }
     });
     return response.init_point;
-  } catch (error) { return null; }
+  } catch (error) { 
+      console.error("Erro Link:", error);
+      return null; 
+  }
 }
 
 // ----------------------------------------------------------------------
