@@ -79,7 +79,7 @@ setInterval(() => {
 
 
 // ----------------------------------------------------------------------
-// 📄 GERADOR DE PDF PROFISSIONAL (VISUAL STOQUI / COMPLETO)
+// 📄 GERADOR DE PDF PROFISSIONAL (VISUAL LIMPO E INTEGRADO)
 // ----------------------------------------------------------------------
 async function gerarPDFGratis(cliente) {
     try {
@@ -96,7 +96,7 @@ async function gerarPDFGratis(cliente) {
         // 1. Configurações Visuais
         const urlLogo = "https://i.postimg.cc/R0J0ccxD/Chat-GPT-Image-8-de-fev-de-2026-08-07-06.png"; 
         const corDestaque = "#ff6b00"; // Laranja do Logo
-        const corTitulo = "#000000";   // Preto (Solicitado)
+        const corTitulo = "#000000";   // Preto
         const corVerde = "#009e2a";    // Verde Promoção
 
         // 2. Lógica de Promoção e Data
@@ -107,24 +107,33 @@ async function gerarPDFGratis(cliente) {
         const horaPedido = new Date().toLocaleTimeString('pt-BR').substring(0,5);
 
         // ⚠️ VALORES DE TESTE (R$ 1,00)
-        // Mude aqui quando for pra valer:
         const precoNormal = 1.00; 
         const precoPromo = 0.50; 
 
-        // 3. Monta as Linhas da Tabela (Agora com Quebra de Linha e Variações)
+        // 3. Monta as Linhas da Tabela (AGORA COM NOMES INTELIGENTES)
         const linhasTabela = cliente.pedido.map(item => {
             // Cálculos
             const vlUnitario = ehPromo ? precoPromo : precoNormal;
             const vlTotal = item.quantidade * vlUnitario;
             
-            // Tratamento do Nome (Adiciona a variação se existir)
+            // 🔥 LÓGICA NOVA DE NOME (INTEGRADO)
             let nomeCompleto = item.prato;
-            
-            // Adiciona variações (Arroz/Strogonoff) se o cliente escolheu
-            if (item.arroz) nomeCompleto += ` (Arroz ${item.arroz})`;
-            if (item.strogonoff) nomeCompleto += ` (${item.strogonoff})`;
-            
-            // HTML do Preço Unitário (Com De/Por)
+
+            // Regra do ARROZ (Só muda se for Integral)
+            if (item.arroz === 'Integral') {
+                // Procura 'Arroz' (maiúsculo ou minúsculo) e troca por 'Arroz integral'
+                nomeCompleto = nomeCompleto.replace(/Arroz/i, 'Arroz integral');
+            }
+            // Se for 'Branco', não faz nada (fica só "Arroz")
+
+            // Regra do STROGONOFF (Só muda se for Light)
+            if (item.strogonoff === 'Light') {
+                // Procura 'strogonoff' e troca por 'strogonoff light'
+                nomeCompleto = nomeCompleto.replace(/strogonoff/i, 'strogonoff light');
+            }
+            // Se for 'Tradicional', não faz nada
+
+            // HTML do Preço Unitário
             let htmlUnitario = "";
             if (ehPromo) {
                 htmlUnitario = `
@@ -164,7 +173,7 @@ async function gerarPDFGratis(cliente) {
             ? `<div style="margin-bottom:5px;">Subtotal: <span style="text-decoration:line-through; color:#999;">R$ ${subtotalSem.toFixed(2).replace('.', ',')}</span> <strong style="color:${corVerde}">R$ ${subtotalCom.toFixed(2).replace('.', ',')}</strong></div>`
             : `<div style="margin-bottom:5px;">Subtotal: <strong>R$ ${subtotalSem.toFixed(2).replace('.', ',')}</strong></div>`;
 
-        // 5. HTML COMPLETO (Layout Moderno)
+        // 5. HTML COMPLETO
         const html = `
         <!DOCTYPE html>
         <html>
@@ -236,7 +245,6 @@ async function gerarPDFGratis(cliente) {
         `;
 
         // 6. GERAÇÃO (API2PDF)
-        // Usando A4 para garantir que caiba tudo se o nome for grande
         const response = await axios.post('https://v2.api2pdf.com/chrome/pdf/html', 
             {
                 html: html,
@@ -250,7 +258,6 @@ async function gerarPDFGratis(cliente) {
         const pdfUrl = response.data.FileUrl;
         if (!pdfUrl) return null;
 
-        // Baixa e converte para enviar ao WaSender
         const fileResponse = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
         const base64PDF = Buffer.from(fileResponse.data, 'binary').toString('base64');
         
@@ -261,6 +268,7 @@ async function gerarPDFGratis(cliente) {
         return null;
     }
 }
+
 // ----------------------------------------------------------------------
 // 🚚 MOTOR DE FRETE
 // ----------------------------------------------------------------------
