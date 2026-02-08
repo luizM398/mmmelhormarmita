@@ -94,8 +94,8 @@ async function gerarPDFGratis(cliente) {
         const qtdTotal = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
         const ehPromo = qtdTotal >= 5;
 
-        const precoNormal = 19.99;
-        const precoPromo = 17.49;
+        const precoNormal = 0.05;
+        const precoPromo = 0.01;
 
         // Monta as linhas da tabela
         const linhasTabela = cliente.pedido.map(item => {
@@ -270,7 +270,7 @@ async function calcularFreteGoogle(cepDestino) {
     let valor = 0;
     let texto = "";
 
-    if (distanciaKm <= 3.0) { valor = 5.00; texto = "R$ 5,00"; } 
+    if (distanciaKm <= 3.0) { valor = 1.00; texto = "R$ 5,00"; } 
     else if (distanciaKm <= 8.0) { valor = 10.00; texto = "R$ 10,00"; }
     else if (distanciaKm <= 14.0) { valor = 15.00; texto = "R$ 15,00"; }
     else if (distanciaKm <= 20.0) { valor = 20.00; texto = "R$ 20,00"; }
@@ -310,7 +310,7 @@ async function gerarLinkPagamento(itens, frete, clienteTelefone) {
   try {
     const preference = new Preference(client);
     const totalMarmitas = itens.reduce((acc, i) => acc + i.quantidade, 0);
-    const precoUnitario = totalMarmitas >= 5 ? 17.49 : 19.99;
+    const precoUnitario = totalMarmitas >= 5 ? 0.01 : 0.05;
 
     const items = itens.map(item => ({
       title: item.prato,
@@ -593,7 +593,7 @@ if (cliente.estado === 'ESCOLHENDO_PRATO') {
   if (isNaN(escolha) || escolha < 1 || escolha > cliente.opcoesPrato.length) { await enviarMensagemWA(numero, msgNaoEntendi(cliente.ultimaMensagem)); return res.status(200).json({ ok: true }); }
   
   const prato = cliente.opcoesPrato[escolha - 1];
-  cliente.pedido.push({ prato: prato.PRATO, valor: 19.99, arroz: null, strogonoff: null, quantidade: 0 });
+  cliente.pedido.push({ prato: prato.PRATO, valor: 0.05, arroz: null, strogonoff: null, quantidade: 0 });
   cliente.precisaArroz = prato.PRATO.toLowerCase().includes('arroz');
   cliente.precisaStrogonoff = prato.PRATO.toLowerCase().includes('strogonoff');
 
@@ -659,7 +659,7 @@ if (cliente.estado === 'ADICIONAR_OUTRO') {
 
   if (mensagem === '2' || mensagem.includes('nao')) {
     const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
-    let valorUnitario = totalMarmitas >= 5 ? 17.49 : 19.99; 
+    let valorUnitario = totalMarmitas >= 5 ? 0.01 : 0.05; 
     let msgPromo = totalMarmitas >= 5 ? "🎉 *PROMOÇÃO ATIVA!* (Acima de 5 un)\n" : "";
     const subtotal = (totalMarmitas * valorUnitario).toFixed(2);
     cliente.totalMarmitas = totalMarmitas; 
@@ -682,7 +682,7 @@ if (cliente.estado === 'AGUARDANDO_CEP') {
     if (frete.erro) { await enviarMensagemWA(numero, frete.msg); return res.status(200).json({ ok: true }); }
     cliente.endereco = `CEP: ${cepLimpo} (${frete.endereco})`; 
     const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
-    const valorUnitario = totalMarmitas >= 5 ? 17.49 : 19.99;
+    const valorUnitario = totalMarmitas >= 5 ? 0.01 : 0.05;
     cliente.valorFrete = frete.valor; 
     cliente.totalFinal = (totalMarmitas * valorUnitario) + frete.valor;
     cliente.estado = 'CONFIRMANDO_ENDERECO_COMPLEMENTO';
