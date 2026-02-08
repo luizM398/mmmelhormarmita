@@ -410,35 +410,47 @@ async function enviarMensagemWA(numero, texto) {
   } catch (err) { console.error(`Erro envio msg:`, err.message); }
 }
 
-// Função de Enviar PDF Corrigida
+// Função de Enviar PDF (Versão Debug / Fofoqueira 🕵️‍♂️)
 async function enviarPDFWA(numero, base64, nomeArquivo) {
     const numeroLimpo = String(numero).replace(/\D/g, '');
     try {
-      
-      // 👇 AQUI ESTÁ A CORREÇÃO MÁGICA
-      // Se o código não tiver o prefixo, a gente coloca na marra.
-      const base64Completo = base64.startsWith('data:') 
-          ? base64 
-          : `data:application/pdf;base64,${base64}`;
+      console.log(`📤 Tentando enviar PDF para ${numeroLimpo}...`);
 
-      await axios.post('https://www.wasenderapi.com/api/send-message', 
-        { 
-            to: numeroLimpo, 
-            text: "Aqui está seu comprovante! 👇",
-            mediaMessage: {
-                mediatype: "document",
-                fileName: nomeArquivo,
-                media: base64Completo // Agora vai com a etiqueta!
-            }
-        }, 
+      // TENTATIVA 1: Manda o Base64 LIMPO (Sem o data:application...)
+      // A maioria das APIs prefere assim.
+      const base64Limpo = base64.replace(/^data:application\/pdf;base64,/, "");
+
+      const payload = { 
+        to: numeroLimpo, 
+        text: "Aqui está seu comprovante! 👇",
+        mediaMessage: {
+            mediatype: "document",
+            fileName: nomeArquivo,
+            media: base64Limpo // Manda limpo
+        }
+      };
+
+      const response = await axios.post('https://www.wasenderapi.com/api/send-message', 
+        payload, 
         { headers: { Authorization: `Bearer ${process.env.WASENDER_TOKEN}`, 'Content-Type': 'application/json' } }
       );
-      console.log("📄 PDF enviado com sucesso (Com prefixo DataURI)!");
+
+      // 👇 AQUI ESTÁ O SEGREDO: Vamos ver o que eles responderam!
+      console.log("📡 RESPOSTA REAL DA WASENDER:", JSON.stringify(response.data, null, 2));
+
+      if (response.data && response.data.status === false) {
+          console.error("❌ A API recusou o envio:", response.data);
+      } else {
+          console.log("✅ PDF enviado (segundo a API)!");
+      }
+
     } catch (err) { 
-      console.error(`Erro envio PDF:`, err.message); 
+      console.error(`❌ Erro CRÍTICO no envio:`, err.message); 
+      if (err.response) {
+          console.error("Dados do erro:", err.response.data);
+      }
     }
 }
-
 // ----------------------------------------------------------------------
 // 🚀 ROTAS DE EXECUÇÃO
 // ----------------------------------------------------------------------
