@@ -78,20 +78,14 @@ setInterval(() => {
 }, 60000);
 
 
-// Função PROFISSIONAL com API2PDF (Retorna LINK)
+// Função PROFISSIONAL com API2PDF (Retorna Base64)
 async function gerarPDFGratis(cliente) {
     try {
-        console.log("⏳ Gerando Link do PDF (API2PDF)...");
+        console.log("⏳ Gerando PDF (API2PDF)...");
 
-        // 👇 SUA CHAVE DO SITE AQUI
         const MINHA_API_KEY = "9409e59e-8602-4930-8c1e-bcf796639659"; 
 
-        if (MINHA_API_KEY === "COLE_SUA_API_KEY_AQUI") {
-            console.log("⚠️ ERRO: API KEY não configurada!");
-            return null;
-        }
-
-        // Configurações e Lógica (Igualzinho antes)
+        // Configurações
         const urlLogo = "https://i.postimg.cc/R0J0ccxD/Chat-GPT-Image-8-de-fev-de-2026-08-07-06.png"; 
         const corPrincipal = "#ff6b00"; 
         const corPrecoNovo = "#009e2a";
@@ -99,7 +93,7 @@ async function gerarPDFGratis(cliente) {
         const qtdTotal = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
         const ehPromo = qtdTotal >= 5;
         
-        // ⚠️ VALORES DE TESTE
+        // ⚠️ VALORES DE TESTE (R$ 1,00)
         const precoNormal = 1.00; 
         const precoPromo = 0.50; 
 
@@ -107,9 +101,11 @@ async function gerarPDFGratis(cliente) {
             const totalItemNormal = item.quantidade * precoNormal;
             const totalItemPromo = item.quantidade * precoPromo;
             let nomePrato = item.prato.replace(/, /g, ' ').substring(0, 35);
+            
             let colPreco = ehPromo 
                 ? `<div style='font-size:10px;color:#999;text-decoration:line-through'>de R$${totalItemNormal.toFixed(2).replace('.', ',')}</div><div style='font-size:14px;color:${corPrecoNovo};font-weight:bold'>por R$${totalItemPromo.toFixed(2).replace('.', ',')}</div>`
                 : `R$ ${totalItemNormal.toFixed(2).replace('.', ',')}`;
+
             return `<tr><td style='padding:10px;border-bottom:1px solid #eee'><span style='font-weight:bold'>${item.quantidade}x</span> ${nomePrato}</td><td style='text-align:right;padding:10px;border-bottom:1px solid #eee'>${colPreco}</td></tr>`;
         }).join('');
 
@@ -125,19 +121,18 @@ async function gerarPDFGratis(cliente) {
 
         // 4. CHAMA A API2PDF
         const response = await axios.post('https://v2.api2pdf.com/chrome/pdf/html', 
-            {
-                html: html,
-                inlinePdf: true,
-                fileName: 'nota_fiscal.pdf',
-                options: { printBackground: true, pageSize: 'A5' }
-            },
+            { html: html, inlinePdf: true, fileName: 'nota_fiscal.pdf', options: { printBackground: true, pageSize: 'A5' } },
             { headers: { 'Authorization': MINHA_API_KEY } }
         );
 
-        // 🔥 O PULO DO GATO: Retorna o LINK direto, não o arquivo pesado
         const pdfUrl = response.data.FileUrl;
-        console.log("✅ Link gerado:", pdfUrl);
-        return pdfUrl;
+        if (!pdfUrl) return null;
+
+        // BAIXA O ARQUIVO PARA TRANSFORMAR EM BASE64
+        const fileResponse = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
+        const base64PDF = Buffer.from(fileResponse.data, 'binary').toString('base64');
+        
+        return base64PDF;
 
     } catch (error) {
         console.error("❌ Erro API2PDF:", error.message);
@@ -347,31 +342,55 @@ async function enviarMensagemWA(numero, texto) {
   } catch (err) { console.error(`Erro envio msg:`, err.message); }
 }
 
-// Função de Enviar PDF (Versão via URL - Mais Leve)
-async function enviarPDFWA(numero, urlPdf, nomeArquivo) {
+// Função NOVA: Upload + Envio (Seguindo o suporte do WaSender)
+async function enviarPDFWA(numero, base64, nomeArquivo) {
     const numeroLimpo = String(numero).replace(/\D/g, '');
     try {
-      console.log(`📤 Enviando URL do PDF para ${numeroLimpo}...`);
+        console.log(`☁️ Fazendo Upload do PDF para o WaSender...`);
 
-      const payload = { 
-        to: numeroLimpo, 
-        text: "Aqui está seu comprovante! 👇",
-        mediaMessage: {
-            mediatype: "document",
-            fileName: nomeArquivo,
-            media: urlPdf // AQUI VAI O LINK DIRETO (http://...)
+        // PASSO 1: Fazer Upload para pegar URL pública deles
+        // Eles pediram o prefixo "data:application/pdf;base64,"
+        const base64ComPrefixo = base64.startsWith('data:') 
+            ? base64 
+            : `data:application/pdf;base64,${base64}`;
+
+        const uploadBody = {
+            base64: base64ComPrefixo,
+            fileName: nomeArquivo
+        };
+
+        const uploadRes = await axios.post('https://www.wasenderapi.com/api/upload', 
+            uploadBody, 
+            { headers: { Authorization: `Bearer ${process.env.WASENDER_TOKEN}`, 'Content-Type': 'application/json' } }
+        );
+
+        if (!uploadRes.data.success || !uploadRes.data.publicUrl) {
+            throw new Error("Falha no Upload: " + JSON.stringify(uploadRes.data));
         }
-      };
 
-      const response = await axios.post('https://www.wasenderapi.com/api/send-message', 
-        payload, 
-        { headers: { Authorization: `Bearer ${process.env.WASENDER_TOKEN}`, 'Content-Type': 'application/json' } }
-      );
+        const urlSegura = uploadRes.data.publicUrl;
+        console.log(`✅ Upload feito! URL Segura: ${urlSegura}`);
 
-      console.log("📡 Status Envio:", JSON.stringify(response.data));
+        // PASSO 2: Enviar a mensagem usando a URL deles
+        console.log(`📤 Enviando mensagem final...`);
+        
+        const sendBody = {
+            to: numeroLimpo,
+            text: "Aqui está seu comprovante! 👇",
+            documentUrl: urlSegura, // A chave mágica que eles pediram
+            fileName: nomeArquivo
+        };
+
+        const sendRes = await axios.post('https://www.wasenderapi.com/api/send-message', 
+            sendBody, 
+            { headers: { Authorization: `Bearer ${process.env.WASENDER_TOKEN}`, 'Content-Type': 'application/json' } }
+        );
+
+        console.log("📡 Resposta Final:", JSON.stringify(sendRes.data));
 
     } catch (err) { 
-      console.error(`❌ Erro Envio:`, err.message); 
+        console.error(`❌ Erro no fluxo WaSender:`, err.message); 
+        if (err.response) console.error("Detalhes:", err.response.data);
     }
 }
 
