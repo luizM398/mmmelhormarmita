@@ -450,7 +450,6 @@ app.post('/webhook', async (req, res) => {
               if(NUMERO_ADMIN) await enviarMensagemWA(NUMERO_ADMIN, msgAdmin); 
           }
         }
-        }
       } catch (error) { console.error("Erro Webhook:", error); }
   }
   res.sendStatus(200);
