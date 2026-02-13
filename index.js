@@ -305,7 +305,7 @@ async function calcularFreteGoogle(cepDestino) {
     let valor = 0;
     let texto = "";
 
-    if (distanciaKm <= 3.0) { valor = 5.00; texto = "R$ 5,00"; } 
+    if (distanciaKm <= 3.0) { valor = 0.00; texto = "R$ 0,00"; } 
     else if (distanciaKm <= 8.0) { valor = 10.00; texto = "R$ 10,00"; }
     else if (distanciaKm <= 14.0) { valor = 15.00; texto = "R$ 15,00"; }
     else if (distanciaKm <= 20.0) { valor = 20.00; texto = "R$ 20,00"; }
