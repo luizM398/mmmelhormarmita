@@ -331,35 +331,60 @@ function msgNaoEntendi(textoAnterior) {
   return `🤔 *Não entendi sua resposta.*\nPor favor, escolha uma das opções abaixo:\n\n-----------------------------\n${textoAnterior}`;
 }
 
-// LÊ O ARQUIVO CSV DA NUVEM (GOOGLE SHEETS) - CORRIGIDO ACENTOS E PREÇOS
+// ======================================================================
+// 1. A VITRINE: Lê a coluna "Nomes Padrões" para mostrar no Zap
+// ======================================================================
 async function obterMenuDaPlanilha() {
     try {
-        // Mudança 1: Removido o arraybuffer para ler com acentos corretos (UTF-8)
         const response = await axios.get(URL_CSV_PRECIFICACAO); 
         const workbook = xlsx.read(response.data, { type: 'string' });
         const aba = workbook.Sheets[workbook.SheetNames[0]];
         const dados = xlsx.utils.sheet_to_json(aba);
         
         return dados.map(item => {
-            const nomeKey = Object.keys(item).find(k => k.toLowerCase().includes('prato'));
-            const promoKey = Object.keys(item).find(k => k.toLowerCase().includes('promocional') || k.toLowerCase().includes('promo'));
+            // Caça a coluna "Nomes Padrões" ignorando espaços ou quebras de linha
+            const chaveNomes = Object.keys(item).find(k => k.toLowerCase().replace(/\s/g, '').includes('nomespadr'));
             
-            // Mudança 2: Limpador implacável de dinheiro (tira R$, espaços, letras e converte pra matemática)
-            let valorPromoLimpo = 0;
-            if (promoKey && item[promoKey]) {
-                let textoValor = String(item[promoKey]).replace(/[^\d,]/g, '').replace(',', '.');
-                valorPromoLimpo = parseFloat(textoValor) || 0;
+            if (chaveNomes && item[chaveNomes]) {
+                return { PRATO: String(item[chaveNomes]).trim() };
             }
-
-            return {
-                PRATO: item[nomeKey],
-                precoNormal: 1.00,   // <-- Seu valor de teste
-                precoVolume: 0.25,   // <-- Seu valor de teste
-                precoPromo: valorPromoLimpo
-            };
-        }).filter(p => p.PRATO);
+            return null;
+        }).filter(p => p !== null);
     } catch (error) { 
-        console.error("❌ Erro CSV:", error.message); 
+        console.error("❌ Erro Menu Vitrine:", error.message);
+        return []; 
+    }
+}
+
+// ======================================================================
+// 2. O CAIXA: Lê os 13 pratos originais para achar o Preço Promocional
+// ======================================================================
+async function obterPrecosReais() {
+    try {
+        const response = await axios.get(URL_CSV_PRECIFICACAO); 
+        const workbook = xlsx.read(response.data, { type: 'string' });
+        const aba = workbook.Sheets[workbook.SheetNames[0]];
+        const dados = xlsx.utils.sheet_to_json(aba);
+        
+        let precos = [];
+        dados.forEach(item => {
+            // Acha a coluna do nome real (que tem 'prato') e ignora a 'nomes padrões'
+            const chaveNomeReal = Object.keys(item).find(k => k.toLowerCase().includes('prato') && !k.toLowerCase().replace(/\s/g, '').includes('nomespadr'));
+            // Acha a coluna de promoção
+            const chavePromo = Object.keys(item).find(k => k.toLowerCase().includes('promocional') || k.toLowerCase().includes('promo'));
+
+            if (chaveNomeReal && item[chaveNomeReal]) {
+                let valorPromo = 0;
+                if (chavePromo && item[chavePromo]) {
+                    // Limpa o R$ e converte para número de matemática
+                    valorPromo = parseFloat(String(item[chavePromo]).replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+                }
+                precos.push({ nomeExato: String(item[chaveNomeReal]).trim(), precoPromo: valorPromo });
+            }
+        });
+        return precos;
+    } catch (error) { 
+        console.error("❌ Erro Preços Caixa:", error.message);
         return []; 
     }
 }
@@ -607,21 +632,33 @@ if (cliente.estado === 'ADICIONAR_OUTRO') {
     return res.status(200).json({ ok: true });
   }
 
-  if (mensagem === '2' || mensagem.includes('nao')) {
-    // 🚀 LÓGICA DE PREÇOS NOVA E INTELIGENTE AQUI
+ if (mensagem === '2' || mensagem.includes('nao')) {
+    
+    // 🚀 O ROBÔ VAI NO CAIXA LER A TABELA DE 13 PRATOS
+    const tabelaPrecos = await obterPrecosReais(); 
+    
     const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
     let subtotalCalculado = 0;
     let tevePromoVolume = false;
 
     cliente.pedido.forEach(item => {
-        if (item.precoPromo > 0) {
-            item.valorAplicado = item.precoPromo; // Prioridade MÁXIMA para o preço da planilha
+        // 1. O robô junta o nome final (ex: "Strogonoff de Frango com Arroz integral")
+        let nomeFinal = item.prato;
+        if (item.arroz === 'Integral') nomeFinal = nomeFinal.replace(/Arroz/i, 'Arroz integral');
+        if (item.strogonoff === 'Light') nomeFinal = nomeFinal.replace(/strogonoff/i, 'strogonoff light');
+
+        // 2. Procura na tabela do Caixa se ESSA variação específica tem promoção
+        const pratoAchado = tabelaPrecos.find(p => p.nomeExato.toLowerCase() === nomeFinal.toLowerCase());
+
+        // 3. Aplica a Regra de Ouro (Caixa > Volume > Normal)
+        if (pratoAchado && pratoAchado.precoPromo > 0) {
+            item.valorAplicado = pratoAchado.precoPromo; // Puxa os 0.20 da planilha
         } else {
             if (totalMarmitas >= 5) {
-                item.valorAplicado = item.precoVolume;
+                item.valorAplicado = 0.25; // Seu valor de TESTE para volume
                 tevePromoVolume = true;
             } else {
-                item.valorAplicado = item.precoNormal;
+                item.valorAplicado = 1.00; // Seu valor de TESTE normal
             }
         }
         subtotalCalculado += (item.valorAplicado * item.quantidade);
