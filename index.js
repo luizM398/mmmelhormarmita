@@ -331,25 +331,31 @@ function msgNaoEntendi(textoAnterior) {
   return `🤔 *Não entendi sua resposta.*\nPor favor, escolha uma das opções abaixo:\n\n-----------------------------\n${textoAnterior}`;
 }
 
-// LÊ O ARQUIVO CSV DA NUVEM (GOOGLE SHEETS)
+// LÊ O ARQUIVO CSV DA NUVEM (GOOGLE SHEETS) - CORRIGIDO ACENTOS E PREÇOS
 async function obterMenuDaPlanilha() {
     try {
-        const response = await axios.get(URL_CSV_PRECIFICACAO, { responseType: 'arraybuffer' });
-        const workbook = xlsx.read(response.data, { type: 'buffer' });
+        // Mudança 1: Removido o arraybuffer para ler com acentos corretos (UTF-8)
+        const response = await axios.get(URL_CSV_PRECIFICACAO); 
+        const workbook = xlsx.read(response.data, { type: 'string' });
         const aba = workbook.Sheets[workbook.SheetNames[0]];
         const dados = xlsx.utils.sheet_to_json(aba);
         
         return dados.map(item => {
-            // Busca a chave que contenha a palavra "Prato" para não ter erro de formatação
             const nomeKey = Object.keys(item).find(k => k.toLowerCase().includes('prato'));
-            // Busca a chave promocional
             const promoKey = Object.keys(item).find(k => k.toLowerCase().includes('promocional') || k.toLowerCase().includes('promo'));
             
+            // Mudança 2: Limpador implacável de dinheiro (tira R$, espaços, letras e converte pra matemática)
+            let valorPromoLimpo = 0;
+            if (promoKey && item[promoKey]) {
+                let textoValor = String(item[promoKey]).replace(/[^\d,]/g, '').replace(',', '.');
+                valorPromoLimpo = parseFloat(textoValor) || 0;
+            }
+
             return {
                 PRATO: item[nomeKey],
-                precoNormal: 1.00,
-                precoVolume: 0.25,
-                precoPromo: promoKey ? parseFloat(String(item[promoKey]).replace(',', '.')) || 0 : 0
+                precoNormal: 1.00,   // <-- Seu valor de teste
+                precoVolume: 0.25,   // <-- Seu valor de teste
+                precoPromo: valorPromoLimpo
             };
         }).filter(p => p.PRATO);
     } catch (error) { 
