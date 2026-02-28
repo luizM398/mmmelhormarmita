@@ -18,9 +18,9 @@ const NUMERO_ADMIN = process.env.NUMERO_ADMIN;
 const MAPBOX_ACCESS_TOKEN = process.env.MAPBOX_ACCESS_TOKEN; 
 const COORD_COZINHA = "-51.11161606538164,-30.109913348576296"; 
 
-// 🔗 LINKS DA PLANILHA (CÓDIGO NOVO)
+// 🔗 LINKS DA PLANILHA (CORRIGIDOS)
 const URL_CSV_PRECIFICACAO = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT5Ro_cegBVlpImDmp37z4C8GCmJyxaf72_t_mjguoJDxPEa0uUh7Jc8N6N2QLE0vlbY_rmkhBXhIz9/pub?gid=2145088419&single=true&output=csv";
-const URL_WEBHOOK_PLANILHA = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT5Ro_cegBVlpImDmp37z4C8GCmJyxaf72_t_mjguoJDxPEa0uUh7Jc8N6N2QLE0vlbY_rmkhBXhIz9/pubhtml"; // <-- Cole o link do Apps Script aqui!
+const URL_WEBHOOK_PLANILHA = "https://script.google.com/macros/s/AKfycbxjcrbmUZ2KqcMUsJ0OARTLVQFwuYQLsXt1_HjYAE7rJg1BMpJorD_zFL8fyom0vMed7A/exec";
 
 const client = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN || 'SEU_TOKEN_MP_AQUI'
@@ -285,17 +285,22 @@ app.post('/webhook', async (req, res) => {
                   await enviarMensagemWA(numeroCliente, "🧾 Segue comprovante simples (PDF indisponível).");
               }
 
-              // 🚀🚀 DISPARO PARA A PLANILHA DO GOOGLE 🚀🚀
+              // 🚀🚀 DISPARO PARA A PLANILHA DO GOOGLE (VERSÃO MELHORADA) 🚀🚀
               for (const item of memoria.pedido) {
                   try {
+                      // Monta o nome exato para a planilha de estoque encontrar
+                      let nomeParaPlanilha = item.prato;
+                      if (item.arroz === 'Integral') nomeParaPlanilha = nomeParaPlanilha.replace(/Arroz/i, 'Arroz integral');
+                      if (item.strogonoff === 'Light') nomeParaPlanilha = nomeParaPlanilha.replace(/strogonoff/i, 'strogonoff light');
+
                       await axios.post(URL_WEBHOOK_PLANILHA, {
                           cliente: memoria.nome,
                           telefone: numeroCliente,
-                          prato: item.prato,
+                          prato: nomeParaPlanilha,
                           quantidade: item.quantidade,
-                          valorCobrado: item.valorAplicado * item.quantidade
+                          valorCobrado: (item.valorAplicado * item.quantidade).toFixed(2)
                       });
-                      console.log(`✅ ${item.prato} enviado para a Planilha!`);
+                      console.log(`✅ ${nomeParaPlanilha} enviado para a Planilha!`);
                   } catch (errSheet) {
                       console.error("❌ Erro ao enviar para o Google Sheets:", errSheet.message);
                   }
