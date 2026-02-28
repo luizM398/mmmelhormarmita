@@ -20,7 +20,7 @@ const COORD_COZINHA = "-51.11161606538164,-30.109913348576296";
 
 // 🔗 LINKS DA PLANILHA (CÓDIGO NOVO)
 const URL_CSV_PRECIFICACAO = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT5Ro_cegBVlpImDmp37z4C8GCmJyxaf72_t_mjguoJDxPEa0uUh7Jc8N6N2QLE0vlbY_rmkhBXhIz9/pub?gid=2145088419&single=true&output=csv";
-const URL_WEBHOOK_PLANILHA = "COLE_AQUI_A_URL_DO_WEBHOOK_DA_PLANILHA"; // <-- Cole o link do Apps Script aqui!
+const URL_WEBHOOK_PLANILHA = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT5Ro_cegBVlpImDmp37z4C8GCmJyxaf72_t_mjguoJDxPEa0uUh7Jc8N6N2QLE0vlbY_rmkhBXhIz9/pubhtml"; // <-- Cole o link do Apps Script aqui!
 
 const client = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN || 'SEU_TOKEN_MP_AQUI'
@@ -91,7 +91,7 @@ async function gerarPDFGratis(cliente) {
             if (item.arroz === 'Integral') nomeCompleto = nomeCompleto.replace(/Arroz/i, 'Arroz integral');
             if (item.strogonoff === 'Light') nomeCompleto = nomeCompleto.replace(/strogonoff/i, 'strogonoff light');
 
-            const ehPromo = item.valorAplicado < 19.99; // Se foi aplicado qualquer desconto
+            const ehPromo = item.valorAplicado < 1.00; // Se foi aplicado qualquer desconto
             
             let htmlUnitario = ehPromo ? 
                 `<div style="font-size:10px; color:#999; text-decoration:line-through;">R$ 19,99</div>
@@ -99,7 +99,7 @@ async function gerarPDFGratis(cliente) {
                  : `<div style="font-size:12px;">R$ ${vlUnitario.toFixed(2).replace('.', ',')}</div>`;
 
             let htmlTotalLinha = ehPromo ? 
-                `<div style="font-size:10px; color:#999; text-decoration:line-through;">R$ ${(item.quantidade * 19.99).toFixed(2).replace('.', ',')}</div>
+                `<div style="font-size:10px; color:#999; text-decoration:line-through;">R$ ${(item.quantidade * 1.00).toFixed(2).replace('.', ',')}</div>
                  <div style="font-size:13px; color:${corVerde}; font-weight:bold;">R$ ${vlTotal.toFixed(2).replace('.', ',')}</div>` 
                  : `<div style="font-size:13px; font-weight:bold;">R$ ${vlTotal.toFixed(2).replace('.', ',')}</div>`;
 
@@ -347,8 +347,8 @@ async function obterMenuDaPlanilha() {
             
             return {
                 PRATO: item[nomeKey],
-                precoNormal: 19.99,
-                precoVolume: 17.49,
+                precoNormal: 1.00,
+                precoVolume: 0.25,
                 precoPromo: promoKey ? parseFloat(String(item[promoKey]).replace(',', '.')) || 0 : 0
             };
         }).filter(p => p.PRATO);
@@ -428,7 +428,7 @@ app.post('/mensagem', async (req, res) => {
     const dataBrasil = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     const diaSemana = dataBrasil.getDay(); 
     const horaAtual = dataBrasil.getHours();
-    const isFinalDeSemana = (diaSemana === 0);
+    const isFinalDeSemana = (diaSemana === 0 ||diaSemana === 6);
     const isForaDoHorario = (horaAtual < 8 || horaAtual >= 18);
 
     if (isFinalDeSemana || isForaDoHorario) {
