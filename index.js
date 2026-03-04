@@ -405,7 +405,7 @@ app.post('/mensagem', async (req, res) => {
 
     if (isFinalDeSemana || isForaDoHorario) {
         if (numero !== process.env.NUMERO_ADMIN && numero !== NUMERO_ADMIN.replace('@c.us', '')) {
-            await enviarMensagemWA(numero, `🍱 *Olá! A Melhor Marmita agradece seu contato.*\n\n🚫 No momento estamos *FECHADOS*.\n\n⏰ Horário: Seg a Sex, das 08h às 18h.\n\nResponderemos assim que iniciarmos nosso expediente! 👋`);
+            await enviarMensagemWA(numero, `🍱 *Olá! A Melhor Marmita agradece seu contato.*\n\n🚫 No momento estamos *FECHADOS*.\n\n⏰ Horário: Seg a Sex, das 09h às 18h.\n\nResponderemos assim que iniciarmos nosso expediente! 👋`);
             return res.status(200).json({ ok: true });
         }
     }
