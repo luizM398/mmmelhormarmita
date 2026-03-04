@@ -90,9 +90,9 @@ async function gerarPDFGratis(cliente) {
             const vlTotal = item.quantidade * vlUnitario;
             
             subtotalCalculado += vlTotal;
-            subtotalSemDesconto += (item.quantidade * 19.99); // Usa 19.99 como base de comparação
+            subtotalSemDesconto += (item.quantidade * 0.35); 
             
-            const ehPromo = vlUnitario < 19.99;
+            const ehPromo = vlUnitario < 0.35;
             if (ehPromo) teveAlgumDesconto = true;
 
             let nomeCompleto = item.prato;
@@ -105,7 +105,7 @@ async function gerarPDFGratis(cliente) {
                  : `<div style="font-size:12px;">R$ ${vlUnitario.toFixed(2).replace('.', ',')}</div>`;
 
             let htmlTotalLinha = ehPromo ? 
-                `<div style="font-size:10px; color:#999; text-decoration:line-through;">R$ ${(item.quantidade * 19.99).toFixed(2).replace('.', ',')}</div>
+                `<div style="font-size:10px; color:#999; text-decoration:line-through;">R$ ${(item.quantidade * 0.35).toFixed(2).replace('.', ',')}</div>
                  <div style="font-size:13px; color:${corVerde}; font-weight:bold;">R$ ${vlTotal.toFixed(2).replace('.', ',')}</div>` 
                  : `<div style="font-size:13px; font-weight:bold;">R$ ${vlTotal.toFixed(2).replace('.', ',')}</div>`;
 
@@ -405,7 +405,7 @@ app.post('/mensagem', async (req, res) => {
 
     if (isFinalDeSemana || isForaDoHorario) {
         if (numero !== process.env.NUMERO_ADMIN && numero !== NUMERO_ADMIN.replace('@c.us', '')) {
-            await enviarMensagemWA(numero, `🍱 *Olá! A Melhor Marmita agradece seu contato.*\n\n🚫 No momento estamos *FECHADOS*.\n\n⏰ Horário: Seg a Sex, das 09h às 18h.\n\nResponderemos assim que iniciarmos nosso expediente! 👋`);
+            await enviarMensagemWA(numero, `🍱 *Olá! A Melhor Marmita agradece seu contato.*\n\n🚫 No momento estamos *FECHADOS*.\n\n⏰ Horário: Seg a Sex, das 09h às 18h.\n\nTente o contato novamente no nosso horário de expediente! 👋`);
             return res.status(200).json({ ok: true });
         }
     }
@@ -447,7 +447,7 @@ if (cliente.estado === 'MENU') {
     let cardapio = `🍱 *Cardápio do Dia para ${cliente.nome}*\n🔥 *PROMOÇÃO:* Acima de 5 unid \n o valor cai para *R$ 17,49/un*!\n⚖️ Peso: 400g\n\n`;
     
     dados.forEach(item => { 
-        let textoPreco = item.preco < 19.99 ? `*R$ ${item.preco.toFixed(2).replace('.', ',')} 🔥*` : `R$ ${item.preco.toFixed(2).replace('.', ',')}`;
+        let textoPreco = item.preco < 0.35 ? `*R$ ${item.preco.toFixed(2).replace('.', ',')} 🔥*` : `R$ ${item.preco.toFixed(2).replace('.', ',')}`;
         cardapio += `🔹 ${item.PRATO} – ${textoPreco}\n`; 
     });
     
@@ -581,14 +581,14 @@ if (cliente.estado === 'ADICIONAR_OUTRO') {
     cliente.pedido.forEach(item => {
         // Busca o preço no arquivo cardapio_data.js
         const pratoBase = cardapioLocal.find(p => item.prato.includes(p.prato) || p.prato.includes(item.prato));
-        let precoCadastrado = pratoBase ? pratoBase.preco : 19.99; 
+        let precoCadastrado = pratoBase ? pratoBase.preco : 0.35; 
 
         // Aplica desconto de volume (5 ou mais)
         let precoFinal = precoCadastrado;
         if (totalMarmitas >= 5) {
-            // Só cai para 17.49 se o valor original for maior que isso!
-            if (precoCadastrado > 17.49) {
-                precoFinal = 17.49; 
+            // Só cai para 0.30 se o valor original for maior que isso!
+            if (precoCadastrado > 0.30) {
+                precoFinal = 0.30; 
                 tevePromoVolume = true;
             }
         }
