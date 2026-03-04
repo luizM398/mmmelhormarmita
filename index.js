@@ -401,7 +401,7 @@ app.post('/mensagem', async (req, res) => {
     const diaSemana = dataBrasil.getDay(); 
     const horaAtual = dataBrasil.getHours();
     const isFinalDeSemana = (diaSemana === 0 || diaSemana === 6);
-    const isForaDoHorario = (horaAtual < 8 || horaAtual >= 18);
+    const isForaDoHorario = (horaAtual < 9 || horaAtual >= 18);
 
     if (isFinalDeSemana || isForaDoHorario) {
         if (numero !== process.env.NUMERO_ADMIN && numero !== NUMERO_ADMIN.replace('@c.us', '')) {
