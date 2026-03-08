@@ -63,20 +63,17 @@ app.post('/webhook', async (req, res) => {
               await enviarMensagemWA(numeroCliente, `Muito obrigado, ${memoria.nome}! Seu pedido já foi para a cozinha. 🍱🔥`);
               if(NUMERO_ADMIN) await enviarMensagemWA(NUMERO_ADMIN, msgAdmin); 
 
-              // 📊 AVISANDO A PLANILHA DO GOOGLE SOBRE A VENDA (FRENTE AUTOMÁTICA) 📊
-              for (const itemVendido of memoria.pedido) {
-                  try {
-                      // ⚠️ ATENÇÃO: COLE O SEU LINK DO GOOGLE AQUI DENTRO DAS ASPAS 👇
-                      await axios.post('https://script.google.com/macros/s/AKfycbxkMt7A_FNbnkly65MmyGdXaLd4SSDEjAQz0u92BGuGEKg7QKx35b0rmlEVrA-0hU4Rcg/exec', {
-                          cliente: memoria.nome,
-                          prato: itemVendido.prato,
-                          quantidade: itemVendido.quantidade,
-                          valorCobrado: itemVendido.valorAplicado * itemVendido.quantidade
-                      });
-                      console.log(`✅ Prato [${itemVendido.prato}] enviado para a Planilha com sucesso!`);
-                  } catch (err) {
-                      console.error(`❌ Erro ao enviar [${itemVendido.prato}] para a planilha:`, err.message);
-                  }
+              // 📊 AVISANDO A PLANILHA DO GOOGLE SOBRE A VENDA (O PEDIDO INTEIRO DE UMA VEZ) 📊
+              try {
+                  // ⚠️ ATENÇÃO: COLE O SEU LINK DO GOOGLE AQUI DENTRO DAS ASPAS 👇
+                  await axios.post('COLE_AQUI_O_LINK_DO_SEU_GOOGLE_SCRIPT', {
+                      cliente: memoria.nome,
+                      pedidoTotal: memoria.pedido,           // Manda a lista inteira de pratos
+                      totalMarmitas: memoria.totalMarmitas   // Manda a soma total (ex: 9 marmitas)
+                  });
+                  console.log(`✅ Pedido inteiro enviado para a Planilha com sucesso!`);
+              } catch (err) {
+                  console.error(`❌ Erro ao enviar pedido para a planilha:`, err.message);
               }
               // --------------------------------------------------------------------------
 
