@@ -209,7 +209,7 @@ if (cliente.estado === 'MENU') {
     let cardapio = `🍱 *Cardápio do Dia para ${cliente.nome}*\n🔥 *PROMOÇÃO:* Acima de 5 unid \n o valor cai para *R$ 17,49/un*!\n⚖️ Peso: 400g\n\n`;
     
     dados.forEach(item => { 
-        let textoPreco = item.preco < 0.35 ? `*R$ ${item.preco.toFixed(2).replace('.', ',')} 🔥*` : `R$ ${item.preco.toFixed(2).replace('.', ',')}`;
+        let textoPreco = item.preco < 19.99 ? `*R$ ${item.preco.toFixed(2).replace('.', ',')} 🔥*` : `R$ ${item.preco.toFixed(2).replace('.', ',')}`;
         cardapio += `🔹 ${item.PRATO} – ${textoPreco}\n`; 
     });
     
@@ -343,14 +343,14 @@ if (cliente.estado === 'ADICIONAR_OUTRO') {
     cliente.pedido.forEach(item => {
         // Busca o preço no arquivo cardapio_data.js
         const pratoBase = cardapioLocal.find(p => item.prato.includes(p.prato) || p.prato.includes(item.prato));
-        let precoCadastrado = pratoBase ? pratoBase.preco : 0.35; 
+        let precoCadastrado = pratoBase ? pratoBase.preco : 19.99; 
 
         // Aplica desconto de volume (5 ou mais)
         let precoFinal = precoCadastrado;
         if (totalMarmitas >= 5) {
-            // Só cai para 0.30 se o valor original for maior que isso!
-            if (precoCadastrado > 0.30) {
-                precoFinal = 0.30; 
+            // Só cai para 17.49 se o valor original for maior que isso!
+            if (precoCadastrado > 17.49) {
+                precoFinal = 17.49; 
                 tevePromoVolume = true;
             }
         }
