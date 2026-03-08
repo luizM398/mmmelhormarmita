@@ -220,7 +220,7 @@ if (cliente.estado === 'MENU') {
     let cardapio = `🍱 *Cardápio do Dia para ${cliente.nome}*\n🔥 *PROMOÇÃO:* Acima de 5 unid \n o valor cai para *R$ 17,49/un*!\n⚖️ Peso: 400g\n\n`;
     
     dados.forEach(item => { 
-        let textoPreco = item.preco < 0.50 ? `*R$ ${item.preco.toFixed(2).replace('.', ',')} 🔥*` : `R$ ${item.preco.toFixed(2).replace('.', ',')}`;
+        let textoPreco = item.preco < 19.99 ? `*R$ ${item.preco.toFixed(2).replace('.', ',')} 🔥*` : `R$ ${item.preco.toFixed(2).replace('.', ',')}`;
         cardapio += `🔹 ${item.PRATO} – ${textoPreco}\n`; 
     });
     
@@ -352,12 +352,12 @@ if (cliente.estado === 'ADICIONAR_OUTRO') {
 
     cliente.pedido.forEach(item => {
         const pratoBase = cardapioLocal.find(p => item.prato.includes(p.prato) || p.prato.includes(item.prato));
-        let precoCadastrado = pratoBase ? pratoBase.preco : 0.50; 
+        let precoCadastrado = pratoBase ? pratoBase.preco : 19.99; 
 
         let precoFinal = precoCadastrado;
         if (totalMarmitas >= 5) {
-            if (precoCadastrado > 0.25) {
-                precoFinal = 0.25; 
+            if (precoCadastrado > 17.49) {
+                precoFinal = 17.49; 
                 tevePromoVolume = true;
             }
         }
