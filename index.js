@@ -30,24 +30,20 @@ app.post('/webhook', async (req, res) => {
 
   if (action === 'payment.created' || action === 'payment.updated') {
       try {
-        // Usa a função limpa do novo arquivo pagamentos.js
         const pagamentoInfo = await consultarPagamento(data.id);
         
         if (pagamentoInfo && pagamentoInfo.status === 'approved') {
           const numeroCliente = pagamentoInfo.external_reference; 
           const valorPago = pagamentoInfo.transaction_amount;
           
-          // Puxa a memória usando a nova estrutura de estado
           const memoria = estadoClientes.getEstado(numeroCliente);
           
-          // Confere se existe um pedido para evitar PDFs vazios
           if (memoria && memoria.pedido.length > 0 && !memoria.pagamentoConfirmado) {
               memoria.pagamentoConfirmado = true;
               memoria.estado = 'FINALIZADO';
               
               await enviarMensagemWA(numeroCliente, "✅ Pagamento recebido! Estou gerando sua Nota Fiscal... 📄");
 
-              // O Maestro pede para o gerador_pdf trabalhar
               const pdfBase64 = await gerarPDFGratis(memoria);
               if (pdfBase64) {
                   await enviarPDFWA(numeroCliente, pdfBase64, `Nota_Fiscal_${data.id}.pdf`);
@@ -66,6 +62,24 @@ app.post('/webhook', async (req, res) => {
               
               await enviarMensagemWA(numeroCliente, `Muito obrigado, ${memoria.nome}! Seu pedido já foi para a cozinha. 🍱🔥`);
               if(NUMERO_ADMIN) await enviarMensagemWA(NUMERO_ADMIN, msgAdmin); 
+
+              // 📊 AVISANDO A PLANILHA DO GOOGLE SOBRE A VENDA (FRENTE AUTOMÁTICA) 📊
+              for (const itemVendido of memoria.pedido) {
+                  try {
+                      // ⚠️ ATENÇÃO: COLE O SEU LINK DO GOOGLE AQUI DENTRO DAS ASPAS 👇
+                      await axios.post('https://script.google.com/macros/s/AKfycbxkMt7A_FNbnkly65MmyGdXaLd4SSDEjAQz0u92BGuGEKg7QKx35b0rmlEVrA-0hU4Rcg/exec', {
+                          cliente: memoria.nome,
+                          prato: itemVendido.prato,
+                          quantidade: itemVendido.quantidade,
+                          valorCobrado: itemVendido.valorAplicado * itemVendido.quantidade
+                      });
+                      console.log(`✅ Prato [${itemVendido.prato}] enviado para a Planilha com sucesso!`);
+                  } catch (err) {
+                      console.error(`❌ Erro ao enviar [${itemVendido.prato}] para a planilha:`, err.message);
+                  }
+              }
+              // --------------------------------------------------------------------------
+
           }
         }
       } catch (error) { console.error("Erro Webhook:", error); }
@@ -265,7 +279,7 @@ if (cliente.estado === 'ESCOLHENDO_PRATO') {
   const prato = cliente.opcoesPrato[escolha - 1];
   cliente.pedido.push({ 
       prato: prato.PRATO, 
-      valorAplicado: 0, // Será calculado no Caixa
+      valorAplicado: 0, 
       arroz: null, 
       strogonoff: null, 
       quantidade: 0 
@@ -335,20 +349,16 @@ if (cliente.estado === 'ADICIONAR_OUTRO') {
   }
 
  if (mensagem === '2' || mensagem.includes('nao')) {
-    // 🚀 LÓGICA DE PRECIFICAÇÃO (A REGRA DE OURO)
     const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
     let subtotalCalculado = 0;
     let tevePromoVolume = false;
 
     cliente.pedido.forEach(item => {
-        // Busca o preço no arquivo cardapio_data.js
         const pratoBase = cardapioLocal.find(p => item.prato.includes(p.prato) || p.prato.includes(item.prato));
         let precoCadastrado = pratoBase ? pratoBase.preco : 19.99; 
 
-        // Aplica desconto de volume (5 ou mais)
         let precoFinal = precoCadastrado;
         if (totalMarmitas >= 5) {
-            // Só cai para 17.49 se o valor original for maior que isso!
             if (precoCadastrado > 17.49) {
                 precoFinal = 17.49; 
                 tevePromoVolume = true;
@@ -378,7 +388,6 @@ if (cliente.estado === 'AGUARDANDO_CEP') {
     const cepLimpo = mensagem.replace(/\D/g, '');
     if (cepLimpo.length !== 8) { await enviarMensagemWA(numero, "⚠️ CEP inválido (digite 8 números)."); return res.status(200).json({ ok: true }); }
     await enviarMensagemWA(numero, "🔍 Calculando frete...");
-    // O Maestro chama a calculadora de frete externa
     const frete = await calcularFreteGoogle(cepLimpo);
     if (frete.erro) { await enviarMensagemWA(numero, frete.msg); return res.status(200).json({ ok: true }); }
     cliente.endereco = `CEP: ${cepLimpo} (${frete.endereco})`; 
@@ -403,7 +412,6 @@ if (cliente.estado === 'ESCOLHENDO_PAGAMENTO' || cliente.estado === 'AGUARDANDO_
   if (mensagem === '0') { cliente.estado = 'ESCOLHENDO_PAGAMENTO'; await enviarMensagemWA(numero, "🔄 Escolha: 1- PIX, 2- Cartão"); return res.status(200).json({ ok: true }); }
   if (mensagem === '1' || mensagem.includes('pix')) {
      await enviarMensagemWA(numero, "💠 *Gerando PIX...*");
-     // O Maestro pede pro arquivo de pagamentos gerar o Pix
      const dadosPix = await gerarPix(cliente.totalFinal, cliente.nome, numero);
      if (dadosPix) {
          await enviarMensagemWA(numero, `Aqui está seu código PIX:`);
@@ -415,7 +423,6 @@ if (cliente.estado === 'ESCOLHENDO_PAGAMENTO' || cliente.estado === 'AGUARDANDO_
   } 
   else if (mensagem === '2' || mensagem.includes('cartao')) {
      await enviarMensagemWA(numero, "💳 *Gerando link...*");
-     // O Maestro pede pro arquivo de pagamentos gerar o Link
      const link = await gerarLinkPagamento(cliente.pedido, cliente.valorFrete, numero);
      if (link) {
          await enviarMensagemWA(numero, `✅ *Clique para pagar:*\n${link}`);
