@@ -2,11 +2,14 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const axios = require('axios');
-const xlsx = require('xlsx'); // Mantido apenas por segurança caso precise no futuro, mas não estamos usando para o menu
-const { MercadoPagoConfig, Payment, Preference } = require('mercadopago');
+const xlsx = require('xlsx'); // Mantido apenas por segurança
 
-// 👇 NOVO BANCO DE DADOS LOCAL DE CARDÁPIO
+// 👇 IMPORTANDO NOSSOS ARQUIVOS MODULARES (O Maestro chamando os músicos)
 const cardapioLocal = require('./cardapio_data');
+const estadoClientes = require('./estado_cliente');
+const gerarPDFGratis = require('./gerador_pdf');
+const calcularFreteGoogle = require('./calculadora_frete');
+const { gerarPix, gerarLinkPagamento, consultarPagamento } = require('./pagamentos');
 
 // ----------------------------------------------------------------------
 // ⚙️ CONFIGURAÇÕES GERAIS
@@ -18,250 +21,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const NUMERO_ADMIN = process.env.NUMERO_ADMIN; 
-const MAPBOX_ACCESS_TOKEN = process.env.MAPBOX_ACCESS_TOKEN; 
-const COORD_COZINHA = "-51.11161606538164,-30.109913348576296"; 
-
-const client = new MercadoPagoConfig({
-  accessToken: process.env.MP_ACCESS_TOKEN || 'SEU_TOKEN_MP_AQUI'
-});
-
-const clientes = {};
-
-// ----------------------------------------------------------------------
-// 🔄 GESTÃO DE ESTADOS DO CLIENTE
-// ----------------------------------------------------------------------
-const estadoClientes = {
-  getEstado: (numero) => {
-    if (!clientes[numero]) {
-      clientes[numero] = { 
-        estado: 'INICIAL', 
-        pedido: [], 
-        nome: '', 
-        recebeuSaudacao: false,
-        pagamentoConfirmado: false,
-        ultimoContato: Date.now()
-      };
-    }
-    return clientes[numero];
-  },
-  resetarCliente: (numero) => {
-    clientes[numero] = { estado: 'INICIAL', pedido: [], nome: '', recebeuSaudacao: false, pagamentoConfirmado: false, ultimoContato: Date.now() };
-  },
-  limparCarrinhoManterMenu: (numero) => {
-    if (clientes[numero]) {
-      clientes[numero].pedido = []; 
-      clientes[numero].estado = 'MENU';
-      clientes[numero].pagamentoConfirmado = false;
-    }
-  }
-};
-
-setInterval(() => {
-  const agora = Date.now();
-  for (const numero in clientes) {
-    if (agora - clientes[numero].ultimoContato > 60 * 60 * 1000) delete clientes[numero];
-  }
-}, 60000);
-
-// ----------------------------------------------------------------------
-// 📄 GERADOR DE PDF PROFISSIONAL (COM PREÇOS DINÂMICOS)
-// ----------------------------------------------------------------------
-async function gerarPDFGratis(cliente) {
-    try {
-        console.log("⏳ Gerando PDF Profissional (API2PDF)...");
-        const MINHA_API_KEY = "9409e59e-8602-4930-8c1e-bcf796639659"; 
-
-        if (MINHA_API_KEY === "COLE_SUA_API_KEY_AQUI") return null;
-
-        const urlLogo = "https://i.postimg.cc/R0J0ccxD/Chat-GPT-Image-8-de-fev-de-2026-08-07-06.png"; 
-        const corDestaque = "#ff6b00"; 
-        const corTitulo = "#000000";   
-        const corVerde = "#009e2a";    
-
-        const dataPedido = new Date().toLocaleDateString('pt-BR');
-        const horaPedido = new Date().toLocaleTimeString('pt-BR').substring(0,5);
-
-        let subtotalCalculado = 0;
-        let subtotalSemDesconto = 0;
-        let teveAlgumDesconto = false;
-
-        const linhasTabela = cliente.pedido.map(item => {
-            const vlUnitario = item.valorAplicado;
-            const vlTotal = item.quantidade * vlUnitario;
-            
-            subtotalCalculado += vlTotal;
-            subtotalSemDesconto += (item.quantidade * 19.99); 
-            
-            const ehPromo = vlUnitario < 19.99;
-            if (ehPromo) teveAlgumDesconto = true;
-
-            let nomeCompleto = item.prato;
-            if (item.arroz === 'Integral') nomeCompleto = nomeCompleto.replace(/Arroz/i, 'Arroz integral');
-            if (item.strogonoff === 'Light') nomeCompleto = nomeCompleto.replace(/strogonoff/i, 'strogonoff light');
-
-            let htmlUnitario = ehPromo ? 
-                `<div style="font-size:10px; color:#999; text-decoration:line-through;">R$ 19,99</div>
-                 <div style="font-size:12px; color:${corVerde}; font-weight:bold;">R$ ${vlUnitario.toFixed(2).replace('.', ',')}</div>` 
-                 : `<div style="font-size:12px;">R$ ${vlUnitario.toFixed(2).replace('.', ',')}</div>`;
-
-            let htmlTotalLinha = ehPromo ? 
-                `<div style="font-size:10px; color:#999; text-decoration:line-through;">R$ ${(item.quantidade * 19.99).toFixed(2).replace('.', ',')}</div>
-                 <div style="font-size:13px; color:${corVerde}; font-weight:bold;">R$ ${vlTotal.toFixed(2).replace('.', ',')}</div>` 
-                 : `<div style="font-size:13px; font-weight:bold;">R$ ${vlTotal.toFixed(2).replace('.', ',')}</div>`;
-
-            return `
-            <tr>
-                <td style="padding:10px 5px; border-bottom:1px solid #eee; text-align:center; font-weight:bold;">${item.quantidade}</td>
-                <td style="padding:10px 5px; border-bottom:1px solid #eee; text-align:left;">${nomeCompleto}</td>
-                <td style="padding:10px 5px; border-bottom:1px solid #eee; text-align:right;">${htmlUnitario}</td>
-                <td style="padding:10px 5px; border-bottom:1px solid #eee; text-align:right;">${htmlTotalLinha}</td>
-            </tr>`;
-        }).join('');
-
-        const totalFinal = subtotalCalculado + cliente.valorFrete;
-        
-        let htmlSubtotal = teveAlgumDesconto 
-            ? `<div style="margin-bottom:5px;">Subtotal: <span style="text-decoration:line-through; color:#999;">R$ ${subtotalSemDesconto.toFixed(2).replace('.', ',')}</span> <strong style="color:${corVerde}">R$ ${subtotalCalculado.toFixed(2).replace('.', ',')}</strong></div>`
-            : `<div style="margin-bottom:5px;">Subtotal: <strong>R$ ${subtotalCalculado.toFixed(2).replace('.', ',')}</strong></div>`;
-
-        const html = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset='UTF-8'>
-            <style>
-                body { font-family: 'Helvetica', sans-serif; color: #333; margin: 0; padding: 20px; font-size: 14px; }
-                .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
-                .logo { max-width: 120px; margin-bottom: 10px; }
-                .titulo { color: ${corTitulo}; font-size: 24px; font-weight: bold; text-transform: uppercase; margin: 5px 0; }
-                .subtitulo { color: #777; font-size: 12px; }
-                .info-box { background: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #eee; margin-bottom: 25px; }
-                .info-linha { margin-bottom: 5px; }
-                .prazo { color: ${corDestaque}; font-weight: bold; margin-top: 10px; font-size: 12px; }
-                table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-                th { background: #f0f0f0; color: #555; font-size: 11px; text-transform: uppercase; padding: 10px 5px; border-bottom: 2px solid #ddd; }
-                .totais-box { float: right; width: 50%; text-align: right; padding-top: 10px; }
-                .linha-total { margin-bottom: 8px; font-size: 14px; }
-                .total-final { font-size: 22px; font-weight: bold; color: ${corTitulo}; border-top: 2px solid #ddd; padding-top: 10px; margin-top: 10px; }
-                .footer { clear: both; text-align: center; margin-top: 60px; font-size: 10px; color: #aaa; border-top: 1px solid #eee; padding-top: 20px; }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <img src="${urlLogo}" class="logo">
-                <div class="titulo">MELHOR MARMITA</div>
-                <div class="subtitulo">Pedido #${Math.floor(Math.random()*8999)+1000} • ${dataPedido} às ${horaPedido}</div>
-            </div>
-            <div class="info-box">
-                <div class="info-linha"><strong>Cliente:</strong> ${cliente.nome}</div>
-                <div class="info-linha"><strong>Endereço:</strong> ${cliente.endereco}</div>
-                <div class="prazo">🚚 Previsão de entrega: 3 a 5 dias úteis após o pedido</div>
-            </div>
-            <table>
-                <thead>
-                    <tr><th style="width: 10%;">QTD</th><th style="width: 50%; text-align: left;">DESCRIÇÃO</th><th style="width: 20%; text-align: right;">UNITÁRIO</th><th style="width: 20%; text-align: right;">TOTAL</th></tr>
-                </thead>
-                <tbody>${linhasTabela}</tbody>
-            </table>
-            <div class="totais-box">
-                ${htmlSubtotal}
-                <div class="linha-total">Taxa de Entrega: R$ ${cliente.valorFrete.toFixed(2).replace('.', ',')}</div>
-                <div class="total-final">TOTAL: R$ ${totalFinal.toFixed(2).replace('.', ',')}</div>
-                <div style="margin-top:10px; font-size:12px; background:#eaffea; display:inline-block; padding:5px 10px; border-radius:15px; color:#007a1e;">
-                    Pagamento: CONFIRMADO ✅
-                </div>
-            </div>
-            <div class="footer"><p>Obrigado pela preferência! 🍱</p><p>Este documento não possui valor fiscal.</p></div>
-        </body>
-        </html>`;
-
-        const response = await axios.post('https://v2.api2pdf.com/chrome/pdf/html', 
-            { html: html, inlinePdf: true, fileName: 'nota_fiscal.pdf', options: { printBackground: true, pageSize: 'A4' } },
-            { headers: { 'Authorization': MINHA_API_KEY } }
-        );
-        const pdfUrl = response.data.FileUrl;
-        if (!pdfUrl) return null;
-        const fileResponse = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
-        return Buffer.from(fileResponse.data, 'binary').toString('base64');
-    } catch (error) { console.error("❌ Erro API2PDF:", error.message); return null; }
-}
-
-// ----------------------------------------------------------------------
-// 🚚 MOTOR DE FRETE
-// ----------------------------------------------------------------------
-async function calcularFreteGoogle(cepDestino) {
-  if (!MAPBOX_ACCESS_TOKEN) return { erro: true, msg: "Erro interno (Token Mapbox ausente)." };
-  try {
-    const cepLimpo = String(cepDestino).replace(/\D/g, '');
-    if (cepLimpo.length !== 8) return { erro: true, msg: "⚠️ CEP inválido. Digite os 8 números." };
-    const urlViaCep = `https://viacep.com.br/ws/${cepLimpo}/json/`;
-    const viaCepRes = await axios.get(urlViaCep);
-    if (viaCepRes.data.erro) return { erro: true, msg: "❌ CEP não encontrado na base dos Correios." };
-    const enderecoTexto = `${viaCepRes.data.logradouro}, ${viaCepRes.data.localidade}, ${viaCepRes.data.uf}, Brasil`;
-    const urlGeo = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(enderecoTexto)}.json?country=br&limit=1&proximity=${COORD_COZINHA}&access_token=${MAPBOX_ACCESS_TOKEN}`;
-    const geoRes = await axios.get(urlGeo);
-    if (!geoRes.data.features || geoRes.data.features.length === 0) return { erro: true, msg: "❌ O mapa não conseguiu localizar a rua." };
-    const destino = geoRes.data.features[0];
-    const coordsDestino = destino.center.join(','); 
-    const urlDist = `https://api.mapbox.com/directions/v5/mapbox/driving/${COORD_COZINHA};${coordsDestino}?access_token=${MAPBOX_ACCESS_TOKEN}`;
-    const distRes = await axios.get(urlDist);
-    if (!distRes.data.routes || distRes.data.routes.length === 0) return { erro: true, msg: "🚫 Rota não encontrada." };
-    const distanciaKm = distRes.data.routes[0].distance / 1000;
-    
-    let valor = 0, texto = "";
-    if (distanciaKm <= 3.0) { valor = 0.00; texto = "R$ 0,00"; } 
-    else if (distanciaKm <= 8.0) { valor = 10.00; texto = "R$ 10,00"; }
-    else if (distanciaKm <= 14.0) { valor = 15.00; texto = "R$ 15,00"; }
-    else if (distanciaKm <= 20.0) { valor = 20.00; texto = "R$ 20,00"; }
-    else { return { erro: true, msg: "🚫 Muito distante (fora da área de entrega de 20km)." }; }
-    return { valor, texto, endereco: enderecoTexto };
-  } catch (error) { return { valor: 15.00, texto: "R$ 15,00 (Contingência)", endereco: "Endereço via CEP" }; }
-}
-
-// ----------------------------------------------------------------------
-// 💰 PROCESSAMENTO DE PAGAMENTOS E LINKS
-// ----------------------------------------------------------------------
-async function gerarPix(valor, clienteNome, clienteTelefone) {
-  try {
-    const payment = new Payment(client);
-    const body = {
-      transaction_amount: parseFloat(valor.toFixed(2)),
-      description: `Marmita - ${clienteNome}`, 
-      payment_method_id: 'pix',
-      notification_url: `${process.env.URL_DO_SEU_SITE}/webhook`, 
-      external_reference: String(clienteTelefone).replace(/\D/g, ''), 
-      payer: { email: `vendas.${Date.now()}@marmitaria.com` }
-    };
-    const response = await payment.create({ body });
-    return { copiaCola: response.point_of_interaction.transaction_data.qr_code, idPagamento: response.id };
-  } catch (error) { return null; }
-}
-
-async function gerarLinkPagamento(itens, frete, clienteTelefone) {
-  try {
-    const SEU_NUMERO_LOJA = "5551984050946"; 
-    const preference = new Preference(client);
-
-    const items = itens.map(item => ({
-      title: item.prato,
-      quantity: Number(item.quantidade),
-      unit_price: Number(item.valorAplicado), // Puxa o valor individual de cada prato
-      currency_id: 'BRL'
-    }));
-
-    if (frete > 0) items.push({ title: 'Taxa de Entrega', quantity: 1, unit_price: Number(frete), currency_id: 'BRL' });
-
-    const response = await preference.create({
-      body: {
-        items: items,
-        external_reference: String(clienteTelefone).replace(/\D/g, ''),
-        back_urls: { success: `https://wa.me/${SEU_NUMERO_LOJA}`, failure: `https://wa.me/${SEU_NUMERO_LOJA}`, pending: `https://wa.me/${SEU_NUMERO_LOJA}` },
-        auto_return: "approved"
-      }
-    });
-    return response.init_point;
-  } catch (error) { return null; }
-}
 
 // ----------------------------------------------------------------------
 // 🔔 WEBHOOK DO MERCADO PAGO E AVISOS
@@ -271,20 +30,24 @@ app.post('/webhook', async (req, res) => {
 
   if (action === 'payment.created' || action === 'payment.updated') {
       try {
-        const payment = new Payment(client);
-        const pagamentoInfo = await payment.get({ id: data.id });
+        // Usa a função limpa do novo arquivo pagamentos.js
+        const pagamentoInfo = await consultarPagamento(data.id);
         
-        if (pagamentoInfo.status === 'approved') {
+        if (pagamentoInfo && pagamentoInfo.status === 'approved') {
           const numeroCliente = pagamentoInfo.external_reference; 
           const valorPago = pagamentoInfo.transaction_amount;
-          const memoria = clientes[numeroCliente];
           
-          if (memoria && !memoria.pagamentoConfirmado) {
+          // Puxa a memória usando a nova estrutura de estado
+          const memoria = estadoClientes.getEstado(numeroCliente);
+          
+          // Confere se existe um pedido para evitar PDFs vazios
+          if (memoria && memoria.pedido.length > 0 && !memoria.pagamentoConfirmado) {
               memoria.pagamentoConfirmado = true;
               memoria.estado = 'FINALIZADO';
               
               await enviarMensagemWA(numeroCliente, "✅ Pagamento recebido! Estou gerando sua Nota Fiscal... 📄");
 
+              // O Maestro pede para o gerador_pdf trabalhar
               const pdfBase64 = await gerarPDFGratis(memoria);
               if (pdfBase64) {
                   await enviarPDFWA(numeroCliente, pdfBase64, `Nota_Fiscal_${data.id}.pdf`);
@@ -311,7 +74,7 @@ app.post('/webhook', async (req, res) => {
 });
 
 // ----------------------------------------------------------------------
-// 🏠 FUNÇÕES DO MENU E SISTEMA (AGORA LENDO O ARQUIVO LOCAL)
+// 🏠 FUNÇÕES DO MENU E SISTEMA 
 // ----------------------------------------------------------------------
 function menuPrincipal(nomeCliente) {
   const nomeDisplay = nomeCliente ? ` ${nomeCliente}` : '';
@@ -322,7 +85,6 @@ function msgNaoEntendi(textoAnterior) {
   return `🤔 *Não entendi sua resposta.*\nPor favor, escolha uma das opções abaixo:\n\n-----------------------------\n${textoAnterior}`;
 }
 
-// 🚀 NOVA FUNÇÃO: LÊ DO SEU NOVO ARQUIVO DE DADOS
 function carregarMenu() {
     return cardapioLocal.map(item => ({
         PRATO: item.prato,
@@ -404,7 +166,7 @@ app.post('/mensagem', async (req, res) => {
     const isForaDoHorario = (horaAtual < 8 || horaAtual >= 18);
 
     if (isFinalDeSemana || isForaDoHorario) {
-        if (numero !== process.env.NUMERO_ADMIN && numero !== NUMERO_ADMIN.replace('@c.us', '')) {
+        if (numero !== process.env.NUMERO_ADMIN && numero !== (NUMERO_ADMIN ? NUMERO_ADMIN.replace('@c.us', '') : '')) {
             await enviarMensagemWA(numero, `🍱 *Olá! A Melhor Marmita agradece seu contato.*\n\n🚫 No momento estamos *FECHADOS*.\n\n⏰ Horário: Seg a Sex, das 08h às 18h.\n\nTente o contato novamente no nosso horário de expediente! 👋`);
             return res.status(200).json({ ok: true });
         }
@@ -616,12 +378,13 @@ if (cliente.estado === 'AGUARDANDO_CEP') {
     const cepLimpo = mensagem.replace(/\D/g, '');
     if (cepLimpo.length !== 8) { await enviarMensagemWA(numero, "⚠️ CEP inválido (digite 8 números)."); return res.status(200).json({ ok: true }); }
     await enviarMensagemWA(numero, "🔍 Calculando frete...");
+    // O Maestro chama a calculadora de frete externa
     const frete = await calcularFreteGoogle(cepLimpo);
     if (frete.erro) { await enviarMensagemWA(numero, frete.msg); return res.status(200).json({ ok: true }); }
     cliente.endereco = `CEP: ${cepLimpo} (${frete.endereco})`; 
     
     cliente.valorFrete = frete.valor; 
-    cliente.totalFinal = cliente.subtotal + frete.valor; // Usa o subtotal certinho
+    cliente.totalFinal = cliente.subtotal + frete.valor; 
     cliente.estado = 'CONFIRMANDO_ENDERECO_COMPLEMENTO';
     await enviarMensagemWA(numero, `✅ *Localizado!*\n📍 ${frete.endereco}\n🚚 Frete: *${frete.texto}*\n\nPor favor digite o *NÚMERO DA CASA* e *COMPLEMENTO*:`); 
     return res.status(200).json({ ok: true });
@@ -640,6 +403,7 @@ if (cliente.estado === 'ESCOLHENDO_PAGAMENTO' || cliente.estado === 'AGUARDANDO_
   if (mensagem === '0') { cliente.estado = 'ESCOLHENDO_PAGAMENTO'; await enviarMensagemWA(numero, "🔄 Escolha: 1- PIX, 2- Cartão"); return res.status(200).json({ ok: true }); }
   if (mensagem === '1' || mensagem.includes('pix')) {
      await enviarMensagemWA(numero, "💠 *Gerando PIX...*");
+     // O Maestro pede pro arquivo de pagamentos gerar o Pix
      const dadosPix = await gerarPix(cliente.totalFinal, cliente.nome, numero);
      if (dadosPix) {
          await enviarMensagemWA(numero, `Aqui está seu código PIX:`);
@@ -651,6 +415,7 @@ if (cliente.estado === 'ESCOLHENDO_PAGAMENTO' || cliente.estado === 'AGUARDANDO_
   } 
   else if (mensagem === '2' || mensagem.includes('cartao')) {
      await enviarMensagemWA(numero, "💳 *Gerando link...*");
+     // O Maestro pede pro arquivo de pagamentos gerar o Link
      const link = await gerarLinkPagamento(cliente.pedido, cliente.valorFrete, numero);
      if (link) {
          await enviarMensagemWA(numero, `✅ *Clique para pagar:*\n${link}`);
