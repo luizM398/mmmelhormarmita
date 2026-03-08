@@ -66,7 +66,7 @@ app.post('/webhook', async (req, res) => {
               // 📊 AVISANDO A PLANILHA DO GOOGLE SOBRE A VENDA (O PEDIDO INTEIRO DE UMA VEZ) 📊
               try {
                   // ⚠️ ATENÇÃO: COLE O SEU LINK DO GOOGLE AQUI DENTRO DAS ASPAS 👇
-                  await axios.post('COLE_AQUI_O_LINK_DO_SEU_GOOGLE_SCRIPT', {
+                  await axios.post('https://script.google.com/macros/s/AKfycby6MZFh6MNdDikcWOj_g9dbRHzb1WwqVp_6xdSZtwfpl3_fZuP_w2QdxMZ8PdIVSljZ_g/exec', {
                       cliente: memoria.nome,
                       pedidoTotal: memoria.pedido,           // Manda a lista inteira de pratos
                       totalMarmitas: memoria.totalMarmitas   // Manda a soma total (ex: 9 marmitas)
