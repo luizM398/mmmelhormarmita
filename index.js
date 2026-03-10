@@ -217,7 +217,7 @@ if (cliente.estado === 'MENU') {
     const dados = carregarMenu();
     if(dados.length === 0) { await enviarMensagemWA(numero, "⚠️ Cardápio indisponível."); return res.status(200).json({ok:true}); }
     
-    let cardapio = `🍱 *Cardápio do Dia para ${cliente.nome}*\n🔥 *PROMOÇÃO:* Acima de 5 unid \n o valor cai para *R$ 17,49/un*!\n(Válido para pratos selecionados).\n⚖️ Peso: 400g\n\n`;
+    let cardapio = `🍱 *Cardápio do Dia para ${cliente.nome}*\n🔥 *PROMOÇÃO:* Acima de 5 unid \n o valor cai para *R$ 17,49/un*!\n⚖️ Peso: 400g\n\n`;
     
     dados.forEach(item => { 
         let textoPreco = item.preco < 19.99 ? `*R$ ${item.preco.toFixed(2).replace('.', ',')} 🔥*` : `R$ ${item.preco.toFixed(2).replace('.', ',')}`;
