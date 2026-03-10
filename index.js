@@ -217,7 +217,7 @@ if (cliente.estado === 'MENU') {
     const dados = carregarMenu();
     if(dados.length === 0) { await enviarMensagemWA(numero, "⚠️ Cardápio indisponível."); return res.status(200).json({ok:true}); }
     
-    let cardapio = `🍱 *Cardápio do Dia para ${cliente.nome}*\n🔥 *PROMOÇÃO:* Acima de 5 unid \n o valor cai para *R$ 17,49/un*!\n⚖️ Peso: 400g\n\n`;
+    let cardapio = `🍱 *Cardápio do Dia para ${cliente.nome}*\n🔥 *PROMOÇÃO:* Acima de 5 unid \n o valor cai para *R$ 17,49/un*!\n(Válido para pratos selecionados).\n⚖️ Peso: 400g\n\n`;
     
     dados.forEach(item => { 
         let textoPreco = item.preco < 19.99 ? `*R$ ${item.preco.toFixed(2).replace('.', ',')} 🔥*` : `R$ ${item.preco.toFixed(2).replace('.', ',')}`;
@@ -345,17 +345,21 @@ if (cliente.estado === 'ADICIONAR_OUTRO') {
     return res.status(200).json({ ok: true });
   }
 
- if (mensagem === '2' || mensagem.includes('nao')) {
+if (mensagem === '2' || mensagem.includes('nao')) {
     const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
     let subtotalCalculado = 0;
     let tevePromoVolume = false;
 
     cliente.pedido.forEach(item => {
         const pratoBase = cardapioLocal.find(p => item.prato.includes(p.prato) || p.prato.includes(item.prato));
+        
         let precoCadastrado = pratoBase ? pratoBase.preco : 19.99; 
+        let isPremium = pratoBase ? pratoBase.premium : false; // 👈 O robô olha se o prato tem a trava premium
 
         let precoFinal = precoCadastrado;
-        if (totalMarmitas >= 5) {
+        
+        // Se pedir 5 ou mais, NÃO for premium e custar mais de 17.49, ele dá o desconto
+        if (totalMarmitas >= 5 && !isPremium) {
             if (precoCadastrado > 17.49) {
                 precoFinal = 17.49; 
                 tevePromoVolume = true;
