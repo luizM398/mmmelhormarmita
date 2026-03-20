@@ -20,6 +20,20 @@ async function calcularFreteGoogle(cepDestino) {
     if (viaCepRes.data.erro) return { erro: true, msg: "❌ CEP não encontrado na base dos Correios." };
     const enderecoTexto = `${viaCepRes.data.logradouro}, ${viaCepRes.data.localidade}, ${viaCepRes.data.uf}, Brasil`;
     
+    // ====================================================================
+    // 🌟 LISTA VIP: CEPs com Frete Grátis garantido (Ex: Prédios e Vizinhos)
+    // Basta adicionar os CEPs (apenas números) entre aspas, separados por vírgula
+    const cepsFreteGratis = ['90020060']; 
+    
+    if (cepsFreteGratis.includes(cepLimpo)) {
+        return { 
+            valor: 0.00, 
+            texto: "R$ 0,00 🎉 *(Promoção Local)*", 
+            endereco: enderecoTexto 
+        };
+    }
+    // ====================================================================
+
     // 2. Transforma o endereço em Coordenadas (Latitude/Longitude)
     const urlGeo = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(enderecoTexto)}.json?country=br&limit=1&proximity=${COORD_COZINHA}&access_token=${MAPBOX_ACCESS_TOKEN}`;
     const geoRes = await axios.get(urlGeo);
