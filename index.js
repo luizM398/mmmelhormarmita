@@ -376,7 +376,7 @@ if (mensagem === '2' || mensagem.includes('nao')) {
     cliente.subtotal = subtotalCalculado;
     cliente.estado = 'AGUARDANDO_CEP'; 
     
-    let resposta = `📝 *Resumo do Pedido:*\n${msgPromo}📦 Itens: ${totalMarmitas} marmitas\n💰 *Subtotal: R$ ${subtotalCalculado.toFixed(2).replace('.', ',')}*\n----------------\n📍 Digite seu *CEP* para calcular o frete:`;
+    let resposta = `📝 *Resumo do Pedido:*\n${msgPromo}📦 Itens: ${totalMarmitas} marmitas\n💰 *Subtotal: R$ ${subtotalCalculado.toFixed(2).replace('.', ',')}*\n----------------\n📍 Para calcularmos a entrega, por favor, digite o seu CEP, o Número da casa e o Complemento:`;
     await enviarMensagemWA(numero, resposta); 
     return res.status(200).json({ ok: true });
   }
