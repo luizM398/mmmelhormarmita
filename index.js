@@ -454,4 +454,4 @@ if (cliente.estado === 'ELOGIOS') {
   } catch (error) { console.error('❌ ERRO GERAL:', error.message); return res.status(200).json({ ok: true }); }
 });
 
-app.listen(PORT, () => { console.log(`🚀 Servidor Melhor Marmita rodando
+app.listen(PORT, () => { console.log(`🚀 Servidor Melhor Marmita rodando na porta ${PORT}`); });
