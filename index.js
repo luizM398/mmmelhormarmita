@@ -386,26 +386,29 @@ if (mensagem === '2' || mensagem.includes('nao')) {
 }
     
 if (cliente.estado === 'AGUARDANDO_CEP') {
-    const cepLimpo = mensagem.replace(/\D/g, '');
-    if (cepLimpo.length !== 8) { await enviarMensagemWA(numero, "⚠️ CEP inválido (digite 8 números)."); return res.status(200).json({ ok: true }); }
-    await enviarMensagemWA(numero, "🔍 Calculando frete...");
-    const frete = await calcularFreteGoogle(cepLimpo);
-    if (frete.erro) { await enviarMensagemWA(numero, frete.msg); return res.status(200).json({ ok: true }); }
-    cliente.endereco = `CEP: ${cepLimpo} (${frete.endereco})`; 
+    if (mensagem === '0') { estadoClientes.limparCarrinhoManterMenu(numero); await enviarMensagemWA(numero, menuPrincipal(cliente.nome)); return res.status(200).json({ ok: true }); }
     
+    await enviarMensagemWA(numero, "🔍 Lendo endereço e calculando rota exata...");
+    
+    // Manda a mensagem INTEIRA do cliente para o calculador
+    const frete = await calcularFreteGoogle(mensagem); 
+    
+    if (frete.erro) { 
+        await enviarMensagemWA(numero, frete.msg); 
+        return res.status(200).json({ ok: true }); 
+    }
+    
+    // Salva o endereço completinho pra mandar pra planilha depois
+    cliente.endereco = frete.endereco; 
     cliente.valorFrete = frete.valor; 
     cliente.totalFinal = cliente.subtotal + frete.valor; 
-    cliente.estado = 'CONFIRMANDO_ENDERECO_COMPLEMENTO';
-    await enviarMensagemWA(numero, `✅ *Localizado!*\n📍 ${frete.endereco}\n🚚 Frete: *${frete.texto}*\n\nPor favor digite o *NÚMERO DA CASA* e *COMPLEMENTO*:`); 
-    return res.status(200).json({ ok: true });
-}
-
-if (cliente.estado === 'CONFIRMANDO_ENDERECO_COMPLEMENTO') {
-    if (mensagem === '0') { cliente.estado = 'AGUARDANDO_CEP'; await enviarMensagemWA(numero, `🔄 Digite o *CEP correto*:`); return res.status(200).json({ ok: true }); }
-    cliente.endereco += ` - Compl: ${texto}`;
+    
+    // Pula a etapa de confirmar endereço e vai direto pro pagamento
     cliente.estado = 'ESCOLHENDO_PAGAMENTO';
-    let resumoPgto = `📝 *Fechamento:*\n💰 *TOTAL FINAL: R$ ${cliente.totalFinal.toFixed(2).replace('.', ',')}*\n\n💳 *Como deseja pagar?*\n1️⃣ PIX\n2️⃣ Cartão (Link)`;
-    await enviarMensagemWA(numero, resumoPgto);
+    
+    let resumoPgto = `✅ *Localizado!*\n📍 ${frete.endereco}\n🚚 Frete: *${frete.texto}*\n\n📝 *Fechamento:*\n💰 *TOTAL FINAL: R$ ${cliente.totalFinal.toFixed(2).replace('.', ',')}*\n\n💳 *Como deseja pagar?*\n1️⃣ PIX\n2️⃣ Cartão (Link)`;
+    
+    await enviarMensagemWA(numero, resumoPgto); 
     return res.status(200).json({ ok: true });
 }
 
