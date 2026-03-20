@@ -20,9 +20,15 @@ async function calcularFreteGoogle(mensagemCliente) {
     const matchNumero = textoSemCep.match(/\b\d+\b/);
     const numeroDigitado = matchNumero ? matchNumero[0] : '';
 
+    // ====================================================================
+    // 🛑 NOVA TRAVA: Bloqueia se o cliente não digitar o número!
+    // ====================================================================
+    if (!numeroDigitado) {
+        return { erro: true, msg: "⚠️ Falta o *NÚMERO* da residência.\nPor favor, digite o CEP e o Número juntos (Ex: 90000-000, 150)." };
+    }
+
     // 3. Pega o resto e trata como Complemento (Ex: Bloco B, Apto 101)
-    let complementoDigitado = textoSemCep;
-    if (numeroDigitado) { complementoDigitado = textoSemCep.replace(numeroDigitado, '').trim(); }
+    let complementoDigitado = textoSemCep.replace(numeroDigitado, '').trim();
     complementoDigitado = complementoDigitado.replace(/^[\s,]+/, ''); // Limpa vírgulas sobrando
 
     // 4. Puxa a Rua base nos Correios
@@ -69,8 +75,7 @@ async function calcularFreteGoogle(mensagemCliente) {
     else { return { erro: true, msg: `🚫 Endereço está a ${distanciaKm.toFixed(1)}km (máx de 20km).` }; }
     
     // 8. Arruma o endereço que vai para o Resumo do WhatsApp
-    let enderecoFinalParaCliente = `${ruaCorreios}`;
-    if (numeroDigitado) enderecoFinalParaCliente += `, ${numeroDigitado}`;
+    let enderecoFinalParaCliente = `${ruaCorreios}, ${numeroDigitado}`;
     if (complementoDigitado) enderecoFinalParaCliente += ` - ${complementoDigitado}`;
     
     return { valor, texto, endereco: enderecoFinalParaCliente };
