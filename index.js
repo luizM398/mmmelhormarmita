@@ -2,9 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const axios = require('axios');
-const xlsx = require('xlsx'); 
+const xlsx = require('xlsx'); // Mantido apenas por segurança
 
-// 👇 IMPORTANDO NOSSOS ARQUIVOS MODULARES
+// 👇 IMPORTANDO NOSSOS ARQUIVOS MODULARES (O Maestro chamando os músicos)
 const cardapioLocal = require('./cardapio_data');
 const estadoClientes = require('./estado_cliente');
 const gerarPDFGratis = require('./gerador_pdf');
@@ -36,298 +36,317 @@ app.post('/webhook', async (req, res) => {
           const numeroCliente = pagamentoInfo.external_reference; 
           const valorPago = pagamentoInfo.transaction_amount;
           
-          let cliente = estadoClientes.buscarCliente(numeroCliente);
-          if(!cliente) {
-              console.log(`⚠️ Pagamento de R$${valorPago} aprovado, mas cliente não encontrado na memória temporária.`);
-              return res.sendStatus(200);
+          const memoria = estadoClientes.getEstado(numeroCliente);
+          
+          if (memoria && memoria.pedido.length > 0 && !memoria.pagamentoConfirmado) {
+              memoria.pagamentoConfirmado = true;
+              memoria.estado = 'FINALIZADO';
+              
+              await enviarMensagemWA(numeroCliente, "✅ Pagamento recebido! Estou gerando sua Nota Fiscal... 📄");
+
+              const pdfBase64 = await gerarPDFGratis(memoria);
+              if (pdfBase64) {
+                  await enviarPDFWA(numeroCliente, pdfBase64, `Nota_Fiscal_${data.id}.pdf`);
+              } else {
+                  await enviarMensagemWA(numeroCliente, "🧾 Segue comprovante simples (PDF indisponível no momento).");
+              }
+
+              const resumoItens = memoria.pedido.map(item => {
+                  let nomePrato = item.prato;
+                  if (item.arroz === 'Integral') nomePrato = nomePrato.replace(/Arroz/i, 'Arroz integral');
+                  if (item.strogonoff === 'Light') nomePrato = nomePrato.replace(/strogonoff/i, 'strogonoff light');
+                  return `▪️ *${item.quantidade}x* ${nomePrato}`;
+              }).join('\n');
+
+              const msgAdmin = `🔔 *NOVO PEDIDO PAGO!* 👨‍🍳🔥\n\n👤 *Cliente:* ${memoria.nome}\n📱 *Zap:* ${numeroCliente}\n📍 *Endereço:* ${memoria.endereco}\n📝 *Compl:* ${memoria.complemento || 'Sem compl.'}\n\n🍲 *PEDIDO:*\n${resumoItens}\n\n🚚 *Frete:* R$ ${memoria.valorFrete.toFixed(2)}\n💰 *TOTAL PAGO: R$ ${valorPago.toFixed(2)}*`;
+              
+              await enviarMensagemWA(numeroCliente, `Muito obrigado, ${memoria.nome}! Seu pedido já foi para a cozinha. 🍱🔥`);
+              if(NUMERO_ADMIN) await enviarMensagemWA(NUMERO_ADMIN, msgAdmin); 
+
+              // 📊 AVISANDO A PLANILHA DO GOOGLE SOBRE A VENDA (O PEDIDO INTEIRO DE UMA VEZ) 📊
+              try {
+                  // ⚠️ ATENÇÃO: COLE O SEU LINK DO GOOGLE AQUI DENTRO DAS ASPAS 👇
+                  await axios.post('https://script.google.com/macros/s/AKfycby6MZFh6MNdDikcWOj_g9dbRHzb1WwqVp_6xdSZtwfpl3_fZuP_w2QdxMZ8PdIVSljZ_g/exec', {
+                      cliente: memoria.nome,
+                      pedidoTotal: memoria.pedido,           // Manda a lista inteira de pratos
+                      totalMarmitas: memoria.totalMarmitas   // Manda a soma total (ex: 9 marmitas)
+                  });
+                  console.log(`✅ Pedido inteiro enviado para a Planilha com sucesso!`);
+              } catch (err) {
+                  console.error(`❌ Erro ao enviar pedido para a planilha:`, err.message);
+              }
+              // --------------------------------------------------------------------------
+
           }
-          
-          cliente.pago = true;
-          cliente.estado = 'FINALIZADO';
-          
-          let msgsAdmins = `✅ *NOVO PAGAMENTO APROVADO! (MERCADO PAGO)*\nCliente: ${cliente.nome}\nValor: R$ ${valorPago.toFixed(2)}\n\nO comprovante será enviado ao cliente, gerando PDF para a cozinha...`;
-          if (NUMERO_ADMIN) await enviarMensagemWA(NUMERO_ADMIN, msgsAdmins);
-          
-          const pedidoData = new Date().toLocaleString('pt-BR');
-          let itensCozinha = '';
-          cliente.pedido.forEach(item => {
-              itensCozinha += `- ${item.quantidade}x ${item.prato}\n`;
-          });
-          
-          let resumoParaCliente = `🎉 *PAGAMENTO APROVADO!* 🎉\n\nRecebemos o seu pagamento de *R$ ${valorPago.toFixed(2)}* com sucesso.\n\nSeu pedido já foi enviado para a nossa cozinha e começará a ser preparado.\n\n📍 *Endereço de Entrega:*\n${cliente.endereco}\n\nMuito obrigado por escolher a Melhor Marmita! 🍱`;
-          
-          await enviarMensagemWA(numeroCliente, resumoParaCliente);
-          
-          try {
-             const pdfBuffer = await gerarPDFGratis(cliente, pedidoData, itensCozinha);
-             if (NUMERO_ADMIN) {
-                 await enviarMediaWA(NUMERO_ADMIN, pdfBuffer, 'Comanda.pdf', `🖨️ *Comanda - ${cliente.nome}*`);
-             }
-             
-             try {
-                const WebhookURL = "https://script.google.com/macros/s/AKfycbyc9R1Tq5E6Z25D0XU0oD3a_pW6-o3l-GqD/exec";
-                
-                let stringPedido = "";
-                cliente.pedido.forEach(i => { stringPedido += `${i.quantidade}x ${i.prato} | `; });
-                
-                await axios.post(WebhookURL, {
-                    data: new Date().toLocaleDateString('pt-BR'),
-                    nome: cliente.nome,
-                    telefone: cliente.numero,
-                    endereco: cliente.endereco,
-                    pedido: stringPedido,
-                    total: cliente.totalFinal,
-                    status: "PAGO VIA MERCADO PAGO"
-                });
-             } catch (sheetErr) {
-                 console.log("Erro ao salvar na planilha pós MP", sheetErr.message);
-             }
-             
-          } catch (pdfErr) {
-             console.error("Erro ao gerar PDF:", pdfErr);
-             if (NUMERO_ADMIN) await enviarMensagemWA(NUMERO_ADMIN, `⚠️ Erro ao gerar o PDF da comanda do cliente ${cliente.nome}. O pedido está pago, veja o resumo no WhatsApp.`);
-          }
-          
-          estadoClientes.limparCarrinhoTotalmente(numeroCliente);
         }
-      } catch (err) { console.error("Erro no processamento do Webhook", err); }
+      } catch (error) { console.error("Erro Webhook:", error); }
   }
   res.sendStatus(200);
 });
 
 // ----------------------------------------------------------------------
-// 📦 INTEGRAÇÃO COM A API DO WASENDER / MENSAGENS
+// 🏠 FUNÇÕES DO MENU E SISTEMA 
 // ----------------------------------------------------------------------
-const WASENDER_TOKEN = process.env.WASENDER_TOKEN;
-const WASENDER_DEVICE = process.env.WASENDER_DEVICE;
-const WASENDER_URL = 'https://api.wasender.com/api/send'; 
-
-async function enviarMensagemWA(numeroPara, texto) {
-    if(!WASENDER_TOKEN || !WASENDER_DEVICE) return console.error('Falta Token ou Device do WaSender');
-    let numeroFormatado = numeroPara.replace(/\D/g, '');
-    if (!numeroFormatado.startsWith('55')) numeroFormatado = '55' + numeroFormatado;
-    
-    try {
-        await axios.post(
-            'https://api.wasender.com/send', 
-            {
-                number: numeroFormatado,
-                type: 'text',
-                message: texto,
-                instance_id: WASENDER_DEVICE,
-                access_token: WASENDER_TOKEN
-            }
-        );
-    } catch (e) { console.error('Erro Wasender:', e.response?.data || e.message); }
+function menuPrincipal(nomeCliente) {
+  const nomeDisplay = nomeCliente ? ` ${nomeCliente}` : '';
+  return `🔻 *Menu Principal para${nomeDisplay}*\n\n1️⃣  Ver Cardápio 🍱\n2️⃣  Fazer Pedido 🛒\n3️⃣  Elogios e reclamações 💬\n\n_Escolha uma opção digitando o número._`;
 }
 
-async function enviarMediaWA(numeroPara, buffer, filename, caption) {
-    if(!WASENDER_TOKEN || !WASENDER_DEVICE) return console.error('Falta Token ou Device do WaSender');
-    let numeroFormatado = numeroPara.replace(/\D/g, '');
-    if (!numeroFormatado.startsWith('55')) numeroFormatado = '55' + numeroFormatado;
-    
-    try {
-        const formData = new FormData();
-        formData.append('number', numeroFormatado);
-        formData.append('type', 'media');
-        formData.append('message', caption || '');
-        formData.append('instance_id', WASENDER_DEVICE);
-        formData.append('access_token', WASENDER_TOKEN);
-        
-        const blob = new Blob([buffer], { type: 'application/pdf' });
-        formData.append('media_file', blob, filename);
-
-        await axios.post('https://api.wasender.com/send', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-        });
-    } catch (error) { console.error('Erro ao enviar mídia Wasender:', error.response?.data || error.message); }
+function msgNaoEntendi(textoAnterior) {
+  return `🤔 *Não entendi sua resposta.*\nPor favor, escolha uma das opções abaixo:\n\n-----------------------------\n${textoAnterior}`;
 }
 
-
-// ----------------------------------------------------------------------
-// 🗣️ RESPOSTAS PADRÃO E MENUS
-// ----------------------------------------------------------------------
-
-function menuPrincipal(nome) {
-    return `Olá ${nome || ''}! 👋 Sou o assistente virtual da *Melhor Marmita*. Como posso te ajudar hoje?\n\n` +
-           `1️⃣ *Fazer um pedido*\n` +
-           `2️⃣ *Ver o Cardápio*\n` +
-           `3️⃣ *Falar com um atendente*`;
+function carregarMenu() {
+    return cardapioLocal.map(item => ({
+        PRATO: item.prato,
+        preco: item.preco
+    }));
 }
 
-function msgNaoEntendi(opcoes) {
-    return `Desculpe, não entendi. 😔 Por favor, responda digitando o *NÚMERO* de uma das opções:\n\n${opcoes}\n\n[0] 🔙 Cancelar / Voltar ao Início`;
-}
-
-function mostrarCardapioSimples() {
-    let msg = `📜 *Nosso Cardápio Saudável*\n\n`;
-    cardapioLocal.forEach((item, index) => {
-        let preco = item.preco.toFixed(2).replace('.', ',');
-        msg += `${index + 1} - ${item.prato}\n💰 R$ ${preco}\n\n`;
-    });
-    msg += `----------------\nPromoção: Acima de 5 marmitas, o preço unitário de vários pratos cai para R$ 17,49!\n----------------\n\nDigite [1] para Fazer um Pedido ou [0] para Voltar.`;
-    return msg;
-}
-
-function menuMarmitasParaComprar() {
-    let msg = `😋 *Escolha suas marmitas:*\n\n`;
-    cardapioLocal.forEach((item, index) => {
-        let preco = item.preco.toFixed(2).replace('.', ',');
-        msg += `${index + 1} - ${item.prato} (R$ ${preco})\n`;
-    });
-    msg += `\nDigite o número da marmita desejada:\n[0] 🔙 Cancelar Pedido`;
-    return msg;
+const timersClientes = {};
+function iniciarTimerInatividade(numero) {
+  if (timersClientes[numero]) clearTimeout(timersClientes[numero]);
+  timersClientes[numero] = setTimeout(async () => {
+    const cliente = estadoClientes.getEstado(numero);
+    if (cliente.estado !== 'INICIAL' && cliente.estado !== 'MENU' && cliente.estado !== 'FINALIZADO') {
+      estadoClientes.resetarCliente(numero); 
+      await enviarMensagemWA(numero, `💤 *Atendimento encerrado por inatividade.* Para recomeçar, basta dizer "Oi".`);
+    }
+    delete timersClientes[numero];
+  }, 10 * 60 * 1000);
 }
 
 // ----------------------------------------------------------------------
-// 🧠 CÉREBRO DO ROBÔ - RECEBE MENSAGENS E DECIDE O ESTADO
+// 📲 INTEGRAÇÃO WHATSAPP (TEXTO E ARQUIVO)
 // ----------------------------------------------------------------------
-
-app.post('/webhook/whatsapp', async (req, res) => {
+async function enviarMensagemWA(numero, texto) {
+  const numeroLimpo = String(numero).replace(/\D/g, '');
   try {
-    const dados = req.body;
-    let numero = dados.from || dados.sender; 
-    let mensagem = dados.message || dados.text || "";
-    let nomeCliente = dados.pushname || "Cliente";
+    await axios.post('https://www.wasenderapi.com/api/send-message', 
+      { to: numeroLimpo, text: texto }, 
+      { headers: { Authorization: `Bearer ${process.env.WASENDER_TOKEN}`, 'Content-Type': 'application/json' } }
+    );
+  } catch (err) { console.error(`Erro msg:`, err.message); }
+}
 
-    if (!numero || !mensagem) return res.status(200).json({ ok: true });
-    mensagem = mensagem.trim();
+async function enviarPDFWA(numero, base64, nomeArquivo) {
+    const numeroLimpo = String(numero).replace(/\D/g, '');
+    try {
+        const base64ComPrefixo = base64.startsWith('data:') ? base64 : `data:application/pdf;base64,${base64}`;
+        const uploadRes = await axios.post('https://www.wasenderapi.com/api/upload', 
+            { base64: base64ComPrefixo, fileName: nomeArquivo }, 
+            { headers: { Authorization: `Bearer ${process.env.WASENDER_TOKEN}`, 'Content-Type': 'application/json' } }
+        );
+        if (!uploadRes.data.success) throw new Error("Falha Upload");
 
-    let cliente = estadoClientes.buscarCliente(numero);
-    
-    if (!cliente || cliente.estado === 'INICIO') {
-        if (!cliente) {
-            estadoClientes.novoCliente(numero, nomeCliente);
-            cliente = estadoClientes.buscarCliente(numero);
-        }
-        
-        let saudacaoRegex = /^(oi|ola|olá|bom dia|boa tarde|boa noite|menu|iniciar|start)/i;
-        if (saudacaoRegex.test(mensagem)) {
-            await enviarMensagemWA(numero, menuPrincipal(cliente.nome));
-            cliente.estado = 'MENU_PRINCIPAL';
-            return res.status(200).json({ ok: true });
-        }
-        
-        if (mensagem === '1' || mensagem.toLowerCase().includes('pedido') || mensagem.toLowerCase().includes('comprar')) {
-            cliente.estado = 'ESCOLHENDO_ITEM';
-            await enviarMensagemWA(numero, menuMarmitasParaComprar());
-            return res.status(200).json({ ok: true });
-        }
-        
-        await enviarMensagemWA(numero, menuPrincipal(cliente.nome));
-        cliente.estado = 'MENU_PRINCIPAL';
-        return res.status(200).json({ ok: true });
-    }
+        await axios.post('https://www.wasenderapi.com/api/send-message', 
+            { to: numeroLimpo, text: "Aqui está seu comprovante! 👇", documentUrl: uploadRes.data.publicUrl, fileName: nomeArquivo }, 
+            { headers: { Authorization: `Bearer ${process.env.WASENDER_TOKEN}`, 'Content-Type': 'application/json' } }
+        );
+    } catch (err) { console.error(`❌ Erro WaSender PDF:`, err.message); }
+}
 
 // ----------------------------------------------------------------------
-// TRATAMENTO DE ESTADOS (O QUE ELE ESTÁ FAZENDO AGORA)
+// 🚀 ROTAS DE EXECUÇÃO (MENSAGENS DO CLIENTE)
 // ----------------------------------------------------------------------
+app.get('/', (req, res) => { res.send('🍱 A Melhor Marmita - Servidor Online 🚀'); });
 
-if (cliente.estado === 'MENU_PRINCIPAL') {
-    if (mensagem === '1') {
-        cliente.estado = 'ESCOLHENDO_ITEM';
-        await enviarMensagemWA(numero, menuMarmitasParaComprar());
-        return res.status(200).json({ ok: true });
-    }
-    if (mensagem === '2') {
-        cliente.estado = 'VENDO_CARDAPIO';
-        await enviarMensagemWA(numero, mostrarCardapioSimples());
-        return res.status(200).json({ ok: true });
-    }
-    if (mensagem === '3') {
-        cliente.estado = 'FALANDO_ATENDENTE';
-        await enviarMensagemWA(numero, `👨‍💻 Um de nossos atendentes já vai falar com você. Aguarde um instante!`);
-        if (NUMERO_ADMIN) await enviarMensagemWA(NUMERO_ADMIN, `🔔 *ATENDIMENTO HUMANO SOLICITADO*\nCliente: ${cliente.nome}\nTelefone: ${numero}`);
-        return res.status(200).json({ ok: true });
-    }
+app.post('/mensagem', async (req, res) => {
+  try {
+    const body = req.body;
+    if (body.event !== 'messages.received') return res.status(200).json({ ok: true });
     
-    await enviarMensagemWA(numero, msgNaoEntendi("1- Pedido\n2- Cardápio\n3- Atendente"));
+    const dadosMensagem = body?.data?.messages;
+    if (!dadosMensagem) return res.status(200).json({ ok: true });
+
+    const remoteJid = dadosMensagem.key?.remoteJid || "";
+    const fromMe = dadosMensagem.key?.fromMe;
+    if (remoteJid.includes('status') || remoteJid.includes('@g.us') || fromMe === true) return res.status(200).json({ ok: true });
+
+    let numeroRaw = dadosMensagem.key?.cleanedSenderPn || dadosMensagem.key?.senderPn || remoteJid;
+    const numero = String(numeroRaw).split('@')[0].replace(/\D/g, '');
+    const texto = (dadosMensagem.messageBody || "").trim();
+
+    if (!texto || !numero) return res.status(200).json({ ok: true });
+    const mensagem = texto.toLowerCase();
+    
+    const dataBrasil = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+    const diaSemana = dataBrasil.getDay(); 
+    const horaAtual = dataBrasil.getHours();
+    const isFinalDeSemana = (diaSemana === 0 || diaSemana === 6);
+    const isForaDoHorario = (horaAtual < 8 || horaAtual >= 18);
+
+    if (isFinalDeSemana || isForaDoHorario) {
+        if (numero !== process.env.NUMERO_ADMIN && numero !== (NUMERO_ADMIN ? NUMERO_ADMIN.replace('@c.us', '') : '')) {
+            await enviarMensagemWA(numero, `🍱 *Olá! A Melhor Marmita agradece seu contato.*\n\n🚫 No momento estamos *FECHADOS*.\n\n⏰ Horário: Seg a Sex, das 08h às 18h.\n\nTente o contato novamente no nosso horário de expediente! 👋`);
+            return res.status(200).json({ ok: true });
+        }
+    }
+
+    const cliente = estadoClientes.getEstado(numero);
+    iniciarTimerInatividade(numero);
+    cliente.ultimoContato = Date.now();
+
+    if (mensagem === 'cancelar' || mensagem === 'desistir') {
+        if (cliente.pagamentoConfirmado) {
+            await enviarMensagemWA(numero, "❌ *Pedido em produção!* Para alterações, fale com o suporte.");
+        } else {
+            estadoClientes.limparCarrinhoManterMenu(numero);
+            await enviarMensagemWA(numero, "✅ Pedido cancelado.\n" + menuPrincipal(cliente.nome));
+        }
+        return res.status(200).json({ ok: true });
+    }
+
+if (!cliente.recebeuSaudacao) {
+  cliente.recebeuSaudacao = true;
+  cliente.estado = 'PERGUNTANDO_NOME_INICIO';
+  await enviarMensagemWA(numero, `👋 Olá! Bem-vindo(a) à *Melhor Marmita* 🍱\n\nComo gostaria de ser chamado(a)?`);
+  return res.status(200).json({ ok: true });
+}
+
+if (cliente.estado === 'PERGUNTANDO_NOME_INICIO') {
+    if (texto.length < 2) { await enviarMensagemWA(numero, "❌ Nome muito curto."); return res.status(200).json({ ok: true }); }
+    cliente.nome = texto;
+    cliente.estado = 'MENU';
+    await enviarMensagemWA(numero, `Prazer, ${cliente.nome}! 🤝\n\n` + menuPrincipal(cliente.nome));
     return res.status(200).json({ ok: true });
+}
+
+if (cliente.estado === 'MENU') {
+  if (mensagem === '1') { 
+    const dados = carregarMenu();
+    if(dados.length === 0) { await enviarMensagemWA(numero, "⚠️ Cardápio indisponível."); return res.status(200).json({ok:true}); }
+    
+    let cardapio = `🍱 *Cardápio do Dia para ${cliente.nome}*\n🔥 *PROMOÇÃO:* Acima de 5 unid \n o valor cai para *R$ 17,49/un*!\n⚖️ Peso: 400g\n\n`;
+    
+    dados.forEach(item => { 
+        let textoPreco = item.preco < 19.99 ? `*R$ ${item.preco.toFixed(2).replace('.', ',')} 🔥*` : `R$ ${item.preco.toFixed(2).replace('.', ',')}`;
+        cardapio += `🔹 ${item.PRATO} – ${textoPreco}\n`; 
+    });
+    
+    cardapio += `\nDigite *2* para pedir.\nDigite *0* para voltar ao Menu principal`;
+    cliente.estado = 'VENDO_CARDAPIO';
+    cliente.ultimaMensagem = cardapio; 
+    await enviarMensagemWA(numero, cardapio);
+    return res.status(200).json({ ok: true });
+  }
+  if (mensagem === '2') {
+    const dados = carregarMenu();
+    let lista = `🍽️ *Vamos montar seu pedido!*\nDigite o NÚMERO do prato:\n\n`;
+    dados.forEach((item, i) => { lista += `${i + 1}️⃣  ${item.PRATO}\n`; });
+    lista += `\n0️⃣ Voltar`;
+    cliente.estado = 'ESCOLHENDO_PRATO';
+    cliente.opcoesPrato = dados;
+    cliente.ultimaMensagem = lista;
+    await enviarMensagemWA(numero, lista);
+    return res.status(200).json({ ok: true });
+  }
+  if (mensagem === '3') { 
+    cliente.estado = 'ELOGIOS';
+    await enviarMensagemWA(numero, `💬 Escreva sua mensagem abaixo (0 para voltar):`); 
+    return res.status(200).json({ ok: true });
+  }
+  if (mensagem === '0') { await enviarMensagemWA(numero, menuPrincipal(cliente.nome)); return res.status(200).json({ ok: true }); }
+  await enviarMensagemWA(numero, msgNaoEntendi(menuPrincipal(cliente.nome)));
+  return res.status(200).json({ ok: true });
 }
 
 if (cliente.estado === 'VENDO_CARDAPIO') {
-    if (mensagem === '1') {
-        cliente.estado = 'ESCOLHENDO_ITEM';
-        await enviarMensagemWA(numero, menuMarmitasParaComprar());
-        return res.status(200).json({ ok: true });
-    }
-    if (mensagem === '0') {
-        estadoClientes.limparCarrinhoManterMenu(numero);
-        await enviarMensagemWA(numero, menuPrincipal(cliente.nome));
-        return res.status(200).json({ ok: true });
-    }
-    await enviarMensagemWA(numero, msgNaoEntendi("1- Fazer Pedido\n0- Voltar"));
+  if (mensagem === '2') {
+    const dados = carregarMenu();
+    let lista = `🍽️ *Vamos montar seu pedido!*\nDigite o NÚMERO do prato:\n\n`;
+    dados.forEach((item, i) => { lista += `${i + 1}️⃣  ${item.PRATO}\n`; });
+    lista += `\n0️⃣ Voltar`;
+    cliente.estado = 'ESCOLHENDO_PRATO';
+    cliente.opcoesPrato = dados;
+    cliente.ultimaMensagem = lista;
+    await enviarMensagemWA(numero, lista);
     return res.status(200).json({ ok: true });
-}
-
-if (cliente.estado === 'ESCOLHENDO_ITEM') {
-    if (mensagem === '0') {
-        estadoClientes.limparCarrinhoManterMenu(numero);
-        await enviarMensagemWA(numero, menuPrincipal(cliente.nome));
-        return res.status(200).json({ ok: true });
-    }
-    
-    let escolhaNum = parseInt(mensagem);
-    if (isNaN(escolhaNum) || escolhaNum < 1 || escolhaNum > cardapioLocal.length) {
-        await enviarMensagemWA(numero, msgNaoEntendi("Digite o NÚMERO do prato correspondente no menu."));
-        return res.status(200).json({ ok: true });
-    }
-    
-    let pratoEscolhido = cardapioLocal[escolhaNum - 1];
-    cliente.itemSendoAdicionado = pratoEscolhido;
-    cliente.estado = 'ESCOLHENDO_QTD_ITEM';
-    
-    await enviarMensagemWA(numero, `Você escolheu:\n*${pratoEscolhido.prato}*\n\nQuantas unidades desse prato você deseja?\n(Digite apenas o número)\n\n[0] 🔙 Cancelar`);
-    return res.status(200).json({ ok: true });
-}
-
-if (cliente.estado === 'ESCOLHENDO_QTD_ITEM') {
-    if (mensagem === '0') {
-        cliente.itemSendoAdicionado = null;
-        cliente.estado = 'ESCOLHENDO_ITEM';
-        await enviarMensagemWA(numero, `❌ Cancelado. Voltando ao menu:\n\n` + menuMarmitasParaComprar());
-        return res.status(200).json({ ok: true });
-    }
-    
-    let qtd = parseInt(mensagem);
-    if (isNaN(qtd) || qtd < 1) {
-        await enviarMensagemWA(numero, "⚠️ Por favor, digite uma quantidade válida (ex: 1, 2, 5).");
-        return res.status(200).json({ ok: true });
-    }
-    
-    let prato = cliente.itemSendoAdicionado;
-    let jaExisteIndex = cliente.pedido.findIndex(p => p.prato === prato.prato);
-    
-    if (jaExisteIndex > -1) {
-        cliente.pedido[jaExisteIndex].quantidade += qtd;
-    } else {
-        cliente.pedido.push({
-            prato: prato.prato,
-            precoBase: prato.preco, 
-            quantidade: qtd,
-            valorAplicado: prato.preco 
-        });
-    }
-    
-    cliente.itemSendoAdicionado = null;
-    cliente.estado = 'MAIS_ALGUMA_COISA';
-    
-    await enviarMensagemWA(numero, `✅ Adicionado ao carrinho!\n\nDeseja adicionar mais alguma marmita ao seu pedido?\n1- Sim\n2- Não, fechar pedido`);
-    return res.status(200).json({ ok: true });
-}
-
-if (cliente.estado === 'MAIS_ALGUMA_COISA') {
-  if (mensagem === '1' || mensagem.toLowerCase() === 'sim') {
-      cliente.estado = 'ESCOLHENDO_ITEM';
-      await enviarMensagemWA(numero, menuMarmitasParaComprar());
-      return res.status(200).json({ ok: true });
   }
-  if (mensagem === '2' || mensagem.toLowerCase() === 'nao' || mensagem.toLowerCase() === 'não') {
-    cliente.estado = 'MANDAR_CARRINHO';
+  if (mensagem === '0') { cliente.estado = 'MENU'; await enviarMensagemWA(numero, menuPrincipal(cliente.nome)); return res.status(200).json({ ok: true }); }
+  await enviarMensagemWA(numero, msgNaoEntendi(cliente.ultimaMensagem));
+  return res.status(200).json({ ok: true });
+}
+
+if (cliente.estado === 'ESCOLHENDO_PRATO') {
+  if (mensagem === '0') { estadoClientes.limparCarrinhoManterMenu(numero); await enviarMensagemWA(numero, menuPrincipal(cliente.nome)); return res.status(200).json({ ok: true }); }
+  const escolha = parseInt(mensagem);
+  if (isNaN(escolha) || escolha < 1 || escolha > cliente.opcoesPrato.length) { await enviarMensagemWA(numero, msgNaoEntendi(cliente.ultimaMensagem)); return res.status(200).json({ ok: true }); }
+  
+  const prato = cliente.opcoesPrato[escolha - 1];
+  cliente.pedido.push({ 
+      prato: prato.PRATO, 
+      valorAplicado: 0, 
+      arroz: null, 
+      strogonoff: null, 
+      quantidade: 0 
+  });
+  cliente.precisaArroz = prato.PRATO.toLowerCase().includes('arroz');
+  cliente.precisaStrogonoff = prato.PRATO.toLowerCase().includes('strogonoff');
+
+  if (cliente.precisaArroz) {
+    cliente.estado = 'VARIACAO_ARROZ';
+    await enviarMensagemWA(numero, `🍚 *Qual tipo de arroz?*\n1️⃣ Branco\n2️⃣ Integral`);
+  } else if (cliente.precisaStrogonoff) {
+    cliente.estado = 'VARIACAO_STROGONOFF';
+    await enviarMensagemWA(numero, `🍛 *Qual tipo de strogonoff?*\n1️⃣ Tradicional\n2️⃣ Light`);
+  } else {
+    cliente.estado = 'QUANTIDADE';
+    await enviarMensagemWA(numero, `🔢 *Quantas marmitas deste prato deseja?*`);
+  }
+  return res.status(200).json({ ok: true });
+}
+
+if (cliente.estado === 'VARIACAO_ARROZ') {
+  const item = cliente.pedido[cliente.pedido.length - 1];
+  if (mensagem === '1' || mensagem.includes('branco')) item.arroz = 'Branco';
+  else if (mensagem === '2' || mensagem.includes('integral')) item.arroz = 'Integral';
+  else { await enviarMensagemWA(numero, msgNaoEntendi("1- Branco\n2- Integral")); return res.status(200).json({ ok: true }); }
+
+  if (cliente.precisaStrogonoff) {
+    cliente.estado = 'VARIACAO_STROGONOFF';
+    await enviarMensagemWA(numero, `🍛 *Qual tipo de strogonoff?*\n1️⃣ Tradicional\n2️⃣ Light`);
+  } else {
+    cliente.estado = 'QUANTIDADE';
+    await enviarMensagemWA(numero, `🔢 *Quantas marmitas deste prato deseja?*`);
+  }
+  return res.status(200).json({ ok: true });
+}
+
+if (cliente.estado === 'VARIACAO_STROGONOFF') {
+  const item = cliente.pedido[cliente.pedido.length - 1];
+  if (mensagem === '1' || mensagem.includes('tradicional')) item.strogonoff = 'Tradicional';
+  else if (mensagem === '2' || mensagem.includes('light')) item.strogonoff = 'Light';
+  else { await enviarMensagemWA(numero, msgNaoEntendi("1- Tradicional\n2- Light")); return res.status(200).json({ ok: true }); }
+  cliente.estado = 'QUANTIDADE';
+  await enviarMensagemWA(numero, `🔢 *Quantas marmitas deste prato deseja?*`); 
+  return res.status(200).json({ ok: true });
+}
     
-    let totalMarmitas = 0;
-    cliente.pedido.forEach(item => totalMarmitas += item.quantidade);
-    
+if (cliente.estado === 'QUANTIDADE') {
+  const qtd = parseInt(mensagem);
+  if (isNaN(qtd) || qtd < 1) { await enviarMensagemWA(numero, "❌ Digite um número válido."); return res.status(200).json({ ok: true }); }
+  
+  cliente.pedido[cliente.pedido.length - 1].quantidade = qtd;
+  cliente.estado = 'ADICIONAR_OUTRO';
+  await enviarMensagemWA(numero, `✅ *Adicionado!*\nDeseja mais algo?\n1️⃣ Sim\n2️⃣ Não, fechar pedido`);
+  return res.status(200).json({ ok: true });
+}
+
+if (cliente.estado === 'ADICIONAR_OUTRO') {
+  if (mensagem === '1' || mensagem.includes('sim')) {
+    cliente.estado = 'ESCOLHENDO_PRATO';
+    const dados = carregarMenu();
+    let lista = `🍽️ *Escolha mais um prato:*\n\n`;
+    dados.forEach((item, i) => { lista += `${i + 1}️⃣  ${item.PRATO}\n`; });
+    lista += `\n0️⃣ Cancelar tudo`;
+    cliente.opcoesPrato = dados;
+    await enviarMensagemWA(numero, lista);
+    return res.status(200).json({ ok: true });
+  }
+
+if (mensagem === '2' || mensagem.includes('nao')) {
+    const totalMarmitas = cliente.pedido.reduce((acc, item) => acc + item.quantidade, 0);
     let subtotalCalculado = 0;
     let tevePromoVolume = false;
 
@@ -335,13 +354,11 @@ if (cliente.estado === 'MAIS_ALGUMA_COISA') {
         const pratoBase = cardapioLocal.find(p => item.prato.includes(p.prato) || p.prato.includes(item.prato));
         
         let precoCadastrado = pratoBase ? pratoBase.preco : 19.99; 
-        
-        let isPremium = false;
-        if (pratoBase && pratoBase.premium) isPremium = true;
-        if (item.prato.toLowerCase().includes('premium')) isPremium = true; 
+        let isPremium = pratoBase ? pratoBase.premium : false; // 👈 O robô olha se o prato tem a trava premium
 
         let precoFinal = precoCadastrado;
         
+        // Se pedir 5 ou mais, NÃO for premium e custar mais de 17.49, ele dá o desconto
         if (totalMarmitas >= 5 && !isPremium) {
             if (precoCadastrado > 17.49) {
                 precoFinal = 17.49; 
@@ -353,16 +370,13 @@ if (cliente.estado === 'MAIS_ALGUMA_COISA') {
         subtotalCalculado += (precoFinal * item.quantidade);
     });
 
-    let msgPromo = "";
-    if (tevePromoVolume) {
-        msgPromo = `🎉 *Desconto Ativado!* Pratos comuns saíram por R$ 17,49.\n`;
-    }
-
+    let msgPromo = tevePromoVolume ? "🎉 *PROMOÇÃO ATIVA!* (Acima de 5 un)\n" : "";
+    
     cliente.totalMarmitas = totalMarmitas; 
     cliente.subtotal = subtotalCalculado;
     cliente.estado = 'AGUARDANDO_CEP'; 
     
-    let resposta = `📝 *Resumo do Pedido:*\n${msgPromo}📦 Itens: ${totalMarmitas} marmitas\n💰 *Subtotal: R$ ${subtotalCalculado.toFixed(2).replace('.', ',')}*\n----------------\n📍 Para calcularmos a entrega, por favor, digite o seu CEP, o Número da casa e o Complemento:`;
+    let resposta = `📝 *Resumo do Pedido:*\n${msgPromo}📦 Itens: ${totalMarmitas} marmitas\n💰 *Subtotal: R$ ${subtotalCalculado.toFixed(2).replace('.', ',')}*\n----------------\n📍 Digite seu *CEP* para calcular o frete:`;
     await enviarMensagemWA(numero, resposta); 
     return res.status(200).json({ ok: true });
   }
@@ -372,30 +386,26 @@ if (cliente.estado === 'MAIS_ALGUMA_COISA') {
 }
     
 if (cliente.estado === 'AGUARDANDO_CEP') {
-    if (mensagem === '0') { estadoClientes.limparCarrinhoManterMenu(numero); await enviarMensagemWA(numero, menuPrincipal(cliente.nome)); return res.status(200).json({ ok: true }); }
-    
-    await enviarMensagemWA(numero, "🔍 Lendo endereço e calculando rota exata...");
-    
-    // Manda a mensagem INTEIRA do cliente para o calculador
-    const frete = await calcularFreteGoogle(mensagem); 
-    
-    if (frete.erro) { 
-        await enviarMensagemWA(numero, frete.msg); 
-        return res.status(200).json({ ok: true }); 
-    }
-    
-    // Salva o endereço completinho pra mandar pra planilha depois
-    cliente.endereco = frete.endereco; 
+    const cepLimpo = mensagem.replace(/\D/g, '');
+    if (cepLimpo.length !== 8) { await enviarMensagemWA(numero, "⚠️ CEP inválido (digite 8 números)."); return res.status(200).json({ ok: true }); }
+    await enviarMensagemWA(numero, "🔍 Calculando frete...");
+    const frete = await calcularFreteGoogle(cepLimpo);
+    if (frete.erro) { await enviarMensagemWA(numero, frete.msg); return res.status(200).json({ ok: true }); }
+    cliente.endereco = `CEP: ${cepLimpo} (${frete.endereco})`; 
     
     cliente.valorFrete = frete.valor; 
     cliente.totalFinal = cliente.subtotal + frete.valor; 
-    
-    // MÁGICA: Pula a etapa de confirmar endereço e vai direto pro pagamento!
+    cliente.estado = 'CONFIRMANDO_ENDERECO_COMPLEMENTO';
+    await enviarMensagemWA(numero, `✅ *Localizado!*\n📍 ${frete.endereco}\n🚚 Frete: *${frete.texto}*\n\nPor favor digite o *NÚMERO DA CASA* e *COMPLEMENTO*:`); 
+    return res.status(200).json({ ok: true });
+}
+
+if (cliente.estado === 'CONFIRMANDO_ENDERECO_COMPLEMENTO') {
+    if (mensagem === '0') { cliente.estado = 'AGUARDANDO_CEP'; await enviarMensagemWA(numero, `🔄 Digite o *CEP correto*:`); return res.status(200).json({ ok: true }); }
+    cliente.endereco += ` - Compl: ${texto}`;
     cliente.estado = 'ESCOLHENDO_PAGAMENTO';
-    
-    let resumoPgto = `✅ *Localizado!*\n📍 ${frete.endereco}\n🚚 Frete: *${frete.texto}*\n\n📝 *Fechamento:*\n💰 *TOTAL FINAL: R$ ${cliente.totalFinal.toFixed(2).replace('.', ',')}*\n\n💳 *Como deseja pagar?*\n1️⃣ PIX\n2️⃣ Cartão (Link)`;
-    
-    await enviarMensagemWA(numero, resumoPgto); 
+    let resumoPgto = `📝 *Fechamento:*\n💰 *TOTAL FINAL: R$ ${cliente.totalFinal.toFixed(2).replace('.', ',')}*\n\n💳 *Como deseja pagar?*\n1️⃣ PIX\n2️⃣ Cartão (Link)`;
+    await enviarMensagemWA(numero, resumoPgto);
     return res.status(200).json({ ok: true });
 }
 
@@ -405,47 +415,36 @@ if (cliente.estado === 'ESCOLHENDO_PAGAMENTO' || cliente.estado === 'AGUARDANDO_
      await enviarMensagemWA(numero, "💠 *Gerando PIX...*");
      const dadosPix = await gerarPix(cliente.totalFinal, cliente.nome, numero);
      if (dadosPix) {
-         await enviarMensagemWA(numero, `Aqui está o código Copia e Cola do PIX (Válido por 30min):\n\n${dadosPix.copiaEcola}`);
+         await enviarMensagemWA(numero, `Aqui está seu código PIX:`);
+         await enviarMensagemWA(numero, dadosPix.copiaCola); 
+         await enviarMensagemWA(numero, `✅ Copie e cole no seu banco. Aguardando pagamento...`);
+         await enviarMensagemWA(numero, `🔄 Se quiser trocar a forma de pagamento, digite *0*.`);
          cliente.estado = 'AGUARDANDO_PAGAMENTO';
-     } else {
-         await enviarMensagemWA(numero, "⚠️ Tivemos um erro ao gerar o PIX. Avise o atendente.");
-     }
-     return res.status(200).json({ ok: true });
-  }
-  
-  if (mensagem === '2' || mensagem.includes('cartao') || mensagem.includes('cartão')) {
-     await enviarMensagemWA(numero, "💳 *Gerando Link de Pagamento...*");
-     const dadosLink = await gerarLinkPagamento(cliente.totalFinal, cliente.nome, numero);
-     if (dadosLink) {
-         await enviarMensagemWA(numero, `Para pagar com cartão (Crédito ou Débito), acesse o link seguro do Mercado Pago:\n\n🔗 ${dadosLink.link}`);
+     } else { await enviarMensagemWA(numero, "⚠️ Erro no PIX. Tente novamente."); }
+  } 
+  else if (mensagem === '2' || mensagem.includes('cartao')) {
+     await enviarMensagemWA(numero, "💳 *Gerando link...*");
+     const link = await gerarLinkPagamento(cliente.pedido, cliente.valorFrete, numero);
+     if (link) {
+         await enviarMensagemWA(numero, `✅ *Clique para pagar:*\n${link}`);
+         await enviarMensagemWA(numero, `🔄 Se quiser trocar a forma de pagamento, digite *0*.`);
          cliente.estado = 'AGUARDANDO_PAGAMENTO';
-     } else {
-         await enviarMensagemWA(numero, "⚠️ Tivemos um erro ao gerar o Link. Avise o atendente.");
-     }
-     return res.status(200).json({ ok: true });
-  }
-
-  if (cliente.estado === 'AGUARDANDO_PAGAMENTO' && mensagem.toLowerCase().includes('pago')) {
-      await enviarMensagemWA(numero, "⏳ Certo! Estamos aguardando a aprovação do Mercado Pago. Assim que compensar, o seu pedido descerá para a cozinha automaticamente. Fique tranquilo!");
-      return res.status(200).json({ ok: true });
-  }
-
-  await enviarMensagemWA(numero, "Escolha uma forma de pagamento para fechar o pedido:\n[1] PIX\n[2] Cartão\n[0] Voltar");
-  return res.status(200).json({ ok: true });
-}
-
-if (cliente.estado === 'FALANDO_ATENDENTE') {
-  if (mensagem === '0') {
-      estadoClientes.limparCarrinhoManterMenu(numero);
-      await enviarMensagemWA(numero, `Atendimento cancelado.\n\n` + menuPrincipal(cliente.nome));
-      return res.status(200).json({ ok: true });
+     } else { await enviarMensagemWA(numero, "⚠️ Erro no link. Tente PIX."); }
   }
   return res.status(200).json({ ok: true });
 }
 
 if (cliente.estado === 'FINALIZADO') {
-  estadoClientes.limparCarrinhoManterMenu(numero);
-  await enviarMensagemWA(numero, `✅ Seu pedido anterior já foi pago e entregue/finalizado! Se necessário, um atendente entrará em contato.\n\n` + menuPrincipal(cliente.nome));
+   if (mensagem === 'menu' || mensagem === '0') { estadoClientes.resetarCliente(numero); await enviarMensagemWA(numero, menuPrincipal()); return res.status(200).json({ ok: true }); }
+   await enviarMensagemWA(numero, `👋 Seu pedido está sendo preparado! Digite *MENU* para novo pedido.`);
+   return res.status(200).json({ ok: true });
+}
+
+if (cliente.estado === 'ELOGIOS') {
+  if (mensagem === '0') { cliente.estado = 'MENU'; await enviarMensagemWA(numero, menuPrincipal(cliente.nome)); return res.status(200).json({ ok: true }); }
+  if (NUMERO_ADMIN) await enviarMensagemWA(NUMERO_ADMIN, `🚨 *FEEDBACK:* ${cliente.nome} (${numero}): ${texto}`);
+  cliente.estado = 'MENU';
+  await enviarMensagemWA(numero, `✅ Obrigado! Se necessário, um atendente entrará em contato.\n\n` + menuPrincipal(cliente.nome));
   return res.status(200).json({ ok: true });
 }
 
@@ -455,4 +454,4 @@ if (cliente.estado === 'FINALIZADO') {
   } catch (error) { console.error('❌ ERRO GERAL:', error.message); return res.status(200).json({ ok: true }); }
 });
 
-app.listen(PORT, () => { console.log(`🚀 Servidor Melhor Marmita rodando na porta ${PORT}`); });
+app.listen(PORT, () => { console.log(`🚀 Servidor Melhor Marmita rodando
