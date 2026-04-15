@@ -5,6 +5,6 @@ module.exports = [
   { prato: "Arroz com brócolis, carne em tiras e cenoura cozida", preco: 19.99 },
   { prato: "Arroz, carne moída e mix de legumes", preco: 19.99 },
   { prato: "Arroz, feijão e frango em cubos com legumes ", preco: 19.99 },
-  { prato: "Arroz, carne de soja e brócolis com ervilha", preco: 19.99 },
+  { prato: "Arroz, carne de soja a primavera e brocolis com ervilhas", preco: 19.99 },
   { prato: "Arroz, chuchu com cenoura e almondegas fit", preco: 19.99 },
 ];
