@@ -414,9 +414,17 @@ if (cliente.estado === 'AGUARDANDO_CEP') {
 
 if (cliente.estado === 'ESCOLHENDO_PAGAMENTO' || cliente.estado === 'AGUARDANDO_PAGAMENTO') {
   if (mensagem === '0') { cliente.estado = 'ESCOLHENDO_PAGAMENTO'; await enviarMensagemWA(numero, "🔄 Escolha: 1- PIX, 2- Cartão"); return res.status(200).json({ ok: true }); }
+  let ehAdmin = false;
+  if (NUMERO_ADMIN) {
+      const adminLimpo = String(NUMERO_ADMIN).replace(/\D/g, '');
+      if (numero.includes(adminLimpo)) {
+          ehAdmin = true;
+      }
+  }
   if (mensagem === '1' || mensagem.includes('pix')) {
      await enviarMensagemWA(numero, "💠 *Gerando PIX...*");
-     const dadosPix = await gerarPix(cliente.totalFinal, cliente.nome, numero);
+    let valorPix = ehAdmin ? 10.00 : cliente.totalFinal;
+     const dadosPix = await gerarPix(valorPix, cliente.nome, numero);
      if (dadosPix) {
          await enviarMensagemWA(numero, `Aqui está seu código PIX:`);
          await enviarMensagemWA(numero, dadosPix.copiaCola); 
@@ -427,7 +435,9 @@ if (cliente.estado === 'ESCOLHENDO_PAGAMENTO' || cliente.estado === 'AGUARDANDO_
   } 
   else if (mensagem === '2' || mensagem.includes('cartao')) {
      await enviarMensagemWA(numero, "💳 *Gerando link...*");
-     const link = await gerarLinkPagamento(cliente.pedido, cliente.valorFrete, numero);
+    let pedidoLink = ehAdmin ? [{ prato: "Pedido Admin VIP", quantidade: 1, valorAplicado: 10.00 }] : cliente.pedido;
+     let freteLink = ehAdmin ? 0 : cliente.valorFrete;
+     const link = await gerarLinkPagamento(pedidoLink, freteLink, numero);
      if (link) {
          await enviarMensagemWA(numero, `✅ *Clique para pagar:*\n${link}`);
          await enviarMensagemWA(numero, `🔄 Se quiser trocar a forma de pagamento, digite *0*.`);
